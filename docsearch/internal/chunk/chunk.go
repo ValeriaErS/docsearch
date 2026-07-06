@@ -1,8 +1,9 @@
 package chunk
 type Chunk struct{
 	Text string
+	Document string
 }
-	func SplitText(text string,size int,overlap int)[]Chunk{ //Разбиваем текст на куски
+	func SplitText(text string,size int,overlap int,docName string)[]Chunk{ //Разбиваем текст на куски
 		var result[]Chunk
 
 		if text==""{ //если пустой,меньше 0 текст-на выход
@@ -12,7 +13,7 @@ type Chunk struct{
 				return result
 		}
 		if len(text)<=size{
-			result=append(result,Chunk{Text:text})
+			result=append(result,Chunk{Text:text,Document:docName})
 			return result
 		}
 		start:=0
@@ -24,7 +25,7 @@ type Chunk struct{
 				end=len(text)
 			}
 			part:=text[start:end]
-			result=append(result,Chunk{Text:part})
+			result=append(result,Chunk{Text:part,Document:docName})
 
 			start=start+size-overlap
 			if start>=len(text){
