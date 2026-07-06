@@ -1,3 +1,24 @@
+package store
+
+type ChunkWithVector struct {
+    Text string
+    Document string
+    Vector []float64
+}
+
+type Store struct {
+    Items []ChunkWithVector    // список всех чанков с векторами
+}
+
+func Add(store Store, text string, docName string, vector []float64) Store {   // добавляет новый чанк с его вектором в хранилище
+    store.Items = append(store.Items, ChunkWithVector{
+        Text: text,
+        Document: docName,
+        Vector: vector,
+    })
+    return store
+}
+
 /*package store
 import(
     "math"
@@ -62,11 +83,5 @@ func FindSimilar(texts[]string,vectors[][]float64,query[]float64,TopK int)
     }
     return dot / (lenA * lenB)
 }*/
-package store
 
-func Add (texts []string, vectors [][]float64, text string, vector []float64) ([]string, [][]float64) {
-    texts = append(texts, text)
-    vectors = append(vectors, vector)
-    return texts, vectors
-}
 
