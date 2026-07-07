@@ -4,6 +4,7 @@ import (
     "bytes"
     "fmt"
     "net/http"
+    "encoding/json" 
 )
 
 type QdrantClient struct {
