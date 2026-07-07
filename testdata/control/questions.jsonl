@@ -1,0 +1,3 @@
+{"query": "Как установить Linux?", "expected_docs": ["install.md"]}
+{"query": "Как настроить сервисы?", "expected_docs": ["service.md"]}
+{"query": "Где лежат конфиги?", "expected_docs": ["config.md"]}
