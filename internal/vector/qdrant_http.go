@@ -7,23 +7,23 @@ import (
     "encoding/json" 
 )
 
-type QdrantClient struct {
+type QdrantClient struct { //хранит настройки подключения к базе
     Host string
     Port int
 }
 
-func NewQdrantClient() *QdrantClient {
+func NewQdrantClient() *QdrantClient {   //создает новый клиент с настройками по умолчанию
     return &QdrantClient{
         Host: "localhost",
         Port: 6333,
     }
 }
 
-func (q *QdrantClient) url(path string) string {
+func (q *QdrantClient) url(path string) string {   // собирает полный адрес для запроса
     return fmt.Sprintf("http://%s:%d%s", q.Host, q.Port, path)
 }
 
-func (q *QdrantClient) Ping() error {
+func (q *QdrantClient) Ping() error {    // проверяет что запущен и отвечает на запросы
     resp, err := http.Get(q.url("/collections"))
     if err != nil {
         return err
@@ -68,7 +68,7 @@ func (q *QdrantClient) CreateCollection(name string, size int) error {
     return nil
 }
 
-func (q *QdrantClient) SavePoint(collectionName string, id string, vector []float32, payload map[string]interface{}) error {
+func (q *QdrantClient) SavePoint(collectionName string, id string, vector []float32, payload map[string]interface{}) error {  // сохраняет один чанк в бд
     data := map[string]interface{}{
         "points": []map[string]interface{}{
             {
