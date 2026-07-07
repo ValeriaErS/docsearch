@@ -41,7 +41,7 @@ func (q *QdrantClient) CreateCollection(name string, size int) error {
     if err != nil {
         return err
     }
-    resp.Body.Close()
+    defer resp.Body.Close()
 
     if resp.StatusCode == 200 {
         return nil
