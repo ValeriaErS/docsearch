@@ -3,7 +3,7 @@ package chunk
 import (
     "regexp"
     "strings"
-    "github.com/pkoukk/tiktoken-go"
+    "fmt"  
 )
 type IntelligentChunk struct {  // я храню один кусок текста
     Text string
@@ -20,11 +20,7 @@ type Section struct{  //одн раздел
 }
 
 func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens int) []IntelligentChunk { // эта функция режет текст на куски
-    enc := tiktoken.GetEncoding("cl100k_base")  // создаю токенизатор, чтобы считать токены
     var chunks []IntelligentChunk
-    var currentText strings.Builder
-    currentTokens := 0
-    chunkIndex := 0
     return chunks
 }
 
@@ -46,28 +42,28 @@ func parseSections(text string) []Section {  // ищу заголовки,соб
             current.Title=strings.TrimPrefix(line,"#")
             current.Content=""
         } else if strings.HasPrefix(line,"##"){
-            if current,Content!="" {
+            if current.Content!="" {
             sections=append(sections,current)
             }
         current.Level=2
             current.Title=strings.TrimPrefix(line,"##")
             current.Content=""
         } else if strings.HasPrefix(line,"###") {
-            if current,Content!="" {
+            if current.Content!="" {
             sections=append(sections,current)
         }
         current.Level=3
             current.Title=strings.TrimPrefix(line,"###")
             current.Content=""
         } else {
-            if current,Content!=""{
-           current.Content = line
+            if current.Content==""{
+            current.Content = line
             } else {
                 current.Content = current.Content + "\n" + line
             }
         }
     }
-     if current,Content!="" {
+     if current.Content!="" {
             sections=append(sections,current)
      }
          return sections
@@ -75,7 +71,7 @@ func parseSections(text string) []Section {  // ищу заголовки,соб
     func splitSentences(text string) []string { //режу на предложения
     r:= regexp.MustCompile(`[.!?]\s+`)
     
-    parts := re.Split(text, -1) //режу
+    parts := r.Split(text, -1) //режу
     out:=[]string{}
 
     for i := 0; i < len(parts); i++ {
@@ -90,6 +86,29 @@ func parseSections(text string) []Section {  // ищу заголовки,соб
     }
 
     return out
+}
+func TestIntelligent() {
+    fmt.Println("Тест")
+
+    text := `# Глава 1
+    Тут текст первой главы.
+    ## Раздел 1.1
+    Тут текст раздела.
+    ### Пункт 1.1.1
+    Тут текст пункта.
+    # Глава 2
+    Тут текст второй главы.`
+
+    sections := parseSections(text)
+
+    fmt.Println("Нашла разделов:", len(sections))
+    for i := 0; i < len(sections); i++ {
+        s := sections[i]
+        fmt.Println("Уровень:", s.Level, "Заголовок:", s.Title)
+        fmt.Println("Текст:", s.Content[:30]+"...")
+    }
+
+    fmt.Println("Работает")
 }
 
 
