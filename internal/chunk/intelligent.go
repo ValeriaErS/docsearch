@@ -5,6 +5,24 @@ import (
     "strings"
     "fmt"  
 )
+func isHeading(line string)bool{   //проверяет начинается ли строка с # ## или ###
+    if string.HasPrefix(line,"# "){
+        return true
+    }
+    if string.HasPrefix(line,"## "){
+        return true
+    }
+    if string.HasPrefix(line,"### "){
+        return true
+    }
+    return false
+}
+
+
+
+
+
+
 type IntelligentChunk struct {  // я храню один кусок текста
     Text string
     Document string
@@ -87,6 +105,8 @@ func parseSections(text string) []Section {  // ищу заголовки,соб
 
     return out
 }
+
+
 func TestIntelligent() {
     fmt.Println("Тест")
 
