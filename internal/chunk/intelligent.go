@@ -34,21 +34,21 @@ func parseSections(text string) []Section {  // ищу заголовки,соб
 
     for i:=0;i<len(lines);i++{
         line:=strings.TrimSpace(lines[i])
-        if strings.HasPrefix(line,"#"){
+        if strings.HasPrefix(line,"# "){
             if current.Content!=""{
                 sections=append(sections,current)
             }
             current.Level=1
             current.Title=strings.TrimPrefix(line,"#")
             current.Content=""
-        } else if strings.HasPrefix(line,"##"){
+        } else if strings.HasPrefix(line,"## "){
             if current.Content!="" {
             sections=append(sections,current)
             }
         current.Level=2
             current.Title=strings.TrimPrefix(line,"##")
             current.Content=""
-        } else if strings.HasPrefix(line,"###") {
+        } else if strings.HasPrefix(line,"### ") {
             if current.Content!="" {
             sections=append(sections,current)
         }
