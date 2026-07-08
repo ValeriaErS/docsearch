@@ -31,6 +31,19 @@ func getHeadingLevel(line string) int{ //возвращает уровень з�
 	return 0
 }
 
+func getHeadingTitle(line string) string{
+	if strings.HasPrefix(line, "### "){
+		return strings.TrimPrefix(line, "### ")
+	}
+    if strings.HasPrefix(line, "## "){
+		return strings.TrimPrefix(line, "## ")
+	}
+	if strings.HasPrefix(line, "# "){
+		return strings.TrimPrefix(line, "# ")
+	}
+	return line
+}
+
 
 
 
@@ -59,6 +72,7 @@ func main() {
 		line:=lines[i]
         heading := isHeading(line)
 		level := getHeadingLevel(line)
-        fmt.Printf("Строка: %q заголовок? %v, уровень: %d\n", line, heading, level)
+		title := getHeadingTitle(line)
+        fmt.Printf("Строка: %q заголовок? %v, уровень: %d, название: %q\n", line, heading, level, title)
     }
 }
