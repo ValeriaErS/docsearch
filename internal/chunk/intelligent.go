@@ -46,14 +46,14 @@ func parseSections(text string) []Section {  // ищу заголовки,соб
             current.Title=strings.TrimPrefix(line,"#")
             current.Content=""
         } else if strings.HasPrefix(line,"##"){
-            if current,Content!=""{
+            if current,Content!="" {
             sections=append(sections,current)
             }
         current.Level=2
             current.Title=strings.TrimPrefix(line,"##")
             current.Content=""
-        } else if strings.HasPrefix(line,"###"){
-            if current,Content!=""{
+        } else if strings.HasPrefix(line,"###") {
+            if current,Content!="" {
             sections=append(sections,current)
         }
         current.Level=3
@@ -65,11 +65,31 @@ func parseSections(text string) []Section {  // ищу заголовки,соб
             } else {
                 current.Content = current.Content + "\n" + line
             }
-    }
+        }
     }
      if current,Content!="" {
             sections=append(sections,current)
      }
-return sections
+         return sections
     }
+    func splitSentences(text string) []string { //режу на предложения
+    r:= regexp.MustCompile(`[.!?]\s+`)
     
+    parts := re.Split(text, -1) //режу
+    out:=[]string{}
+
+    for i := 0; i < len(parts); i++ {
+        s:= strings.TrimSpace(parts[i])
+        if s == "" {
+            continue
+            }
+            if s[len(s)-1]!='.' && s[len(s)-1] != '!' && s[len(s)-1] != '?' { //ставлю точку
+            s = s + "."
+        }
+        out = append(out, s)
+    }
+
+    return out
+}
+
+
