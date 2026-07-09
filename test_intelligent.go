@@ -159,7 +159,7 @@ func main(){
 	  fmt.Println("Чанков:",len(chunks))
 	  for i:=0;i<len(chunks);i++ {
 		ch:=chunks[i]
-		fmt.Println("Чанк %d ---\n", i+1)
+		fmt.Printf("Чанк %d ---\n", i+1)
 		fmt.Println("Документ:", ch.Document)
         fmt.Println("Раздел:", ch.Section)
         fmt.Println("Уровень:", ch.Level)

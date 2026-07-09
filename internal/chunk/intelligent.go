@@ -1,134 +1,147 @@
-package chunk
-
-import (
-    "regexp"
+package main
+import(
+	"fmt"
     "strings"
-    "fmt"  
+    "github.com/pkoukk/tiktoken-go"
 )
 func isHeading(line string)bool{   //проверяет начинается ли строка с # ## или ###
-    if string.HasPrefix(line,"# "){
+    if strings.HasPrefix(line,"# "){
         return true
     }
-    if string.HasPrefix(line,"## "){
+    if strings.HasPrefix(line,"## "){
         return true
     }
-    if string.HasPrefix(line,"### "){
+    if strings.HasPrefix(line,"### "){
         return true
     }
     return false
 }
 
-
-
-
-
-
-type IntelligentChunk struct {  // я храню один кусок текста
-    Text string
-    Document string
-    Section string
-    Level int
-    Index int
-    TokenCount int
+func getHeadingLevel(line string) int{ //возвращает уровень заголовка (1, 2 или 3)
+	if strings.HasPrefix(line,"### "){
+		return 3
+	}
+    if strings.HasPrefix(line,"## "){
+		return 2
+	}
+    if strings.HasPrefix(line,"# "){
+		return 1
+	}
+	return 0
 }
-type Section struct{  //одн раздел
+
+func getHeadingTitle(line string) string{   // убирает # оставляет только название
+	if strings.HasPrefix(line, "### "){
+		return strings.TrimPrefix(line, "### ")
+	}
+    if strings.HasPrefix(line, "## "){
+		return strings.TrimPrefix(line, "## ")
+	}
+	if strings.HasPrefix(line, "# "){
+		return strings.TrimPrefix(line, "# ")
+	}
+	return line
+}
+
+type Section struct{  //один раздел
     Level int
     Title string
     Content string
 }
 
-func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens int) []IntelligentChunk { // эта функция режет текст на куски
-    var chunks []IntelligentChunk
-    return chunks
+func parseSections(text string) []Section{  // разбирает текст на разделы по заголовкам
+	var sections []Section
+	lines:=strings.Split(text, "\n")
+
+	var current Section
+	current.Level=1
+	current.Title="root"
+
+	for i:=0;i<len(lines);i++{
+		line:=strings.TrimSpace(lines[i])
+    if isHeading(line){      // если в текущем разделе есть текст сохраняю его
+		if current.Content!=""{
+			sections=append(sections,current)
+		}
+		current.Level=getHeadingLevel(line)  // начинаю новый раздел
+		current.Title=getHeadingTitle(line)
+		current.Content=""
+	}else{
+		if current.Content==""{  // обычный текст добавляю к текущему разделу
+			current.Content=line
+		}else{
+			current.Content=current.Content+"\n"+line
+		}
+	}
+}
+if current.Content!=""{
+	sections=append(sections,current)
+}
+return sections
+
 }
 
-func parseSections(text string) []Section {  // ищу заголовки,собираю текст
-    var sections []Section
-    lines := strings.Split(text, "\n")
-    
-    var current Section
-    current.Level = 1
-    current.Title = "root"
-
-    for i:=0;i<len(lines);i++{
-        line:=strings.TrimSpace(lines[i])
-        if strings.HasPrefix(line,"# "){
-            if current.Content!=""{
-                sections=append(sections,current)
-            }
-            current.Level=1
-            current.Title=strings.TrimPrefix(line,"#")
-            current.Content=""
-        } else if strings.HasPrefix(line,"## "){
-            if current.Content!="" {
-            sections=append(sections,current)
-            }
-        current.Level=2
-            current.Title=strings.TrimPrefix(line,"##")
-            current.Content=""
-        } else if strings.HasPrefix(line,"### ") {
-            if current.Content!="" {
-            sections=append(sections,current)
-        }
-        current.Level=3
-            current.Title=strings.TrimPrefix(line,"###")
-            current.Content=""
-        } else {
-            if current.Content==""{
-            current.Content = line
-            } else {
-                current.Content = current.Content + "\n" + line
-            }
-        }
-    }
-     if current.Content!="" {
-            sections=append(sections,current)
-     }
-         return sections
-    }
-    func splitSentences(text string) []string { //режу на предложения
-    r:= regexp.MustCompile(`[.!?]\s+`)
-    
-    parts := r.Split(text, -1) //режу
-    out:=[]string{}
-
-    for i := 0; i < len(parts); i++ {
-        s:= strings.TrimSpace(parts[i])
-        if s == "" {
-            continue
-            }
-            if s[len(s)-1]!='.' && s[len(s)-1] != '!' && s[len(s)-1] != '?' { //ставлю точку
-            s = s + "."
-        }
-        out = append(out, s)
-    }
-
-    return out
+type IntelligentChunk struct {  // один чанк
+	Text string
+	Document string
+	Section string
+	Level int
+	Index int
+	TokenCount int 
 }
+func SplitIntelligent(text string, docName string, maxTokens int)[]IntelligentChunk{ //режу
+	enc,_:=tiktoken.GetEncoding ("cl100k_base")
+	var chunks []IntelligentChunk
 
+	sections:=parseSections(text)
+	chunkIndex:=0
 
-func TestIntelligent() {
-    fmt.Println("Тест")
+	for _, section:=range sections{
+		sentences:=strings.Split(section.Content, ". ")
 
-    text := `# Глава 1
-    Тут текст первой главы.
-    ## Раздел 1.1
-    Тут текст раздела.
-    ### Пункт 1.1.1
-    Тут текст пункта.
-    # Глава 2
-    Тут текст второй главы.`
+		var current string
+		currentTokens:=0
 
-    sections := parseSections(text)
-
-    fmt.Println("Нашла разделов:", len(sections))
-    for i := 0; i < len(sections); i++ {
-        s := sections[i]
-        fmt.Println("Уровень:", s.Level, "Заголовок:", s.Title)
-        fmt.Println("Текст:", s.Content[:30]+"...")
-    }
-
-    fmt.Println("Работает")
+		for i:=0;i<len(sentences);i++{
+			s:=sentences[i]
+			if i<len(sentences)-1{
+				s=s+"."
+			}
+		tokenCount:=len(enc.Encode(s,nil,nil))
+		if currentTokens+tokenCount<=maxTokens{
+			if current!=""{
+				current=current+" "+s
+			} else {
+				current=s
+			}
+			currentTokens=currentTokens+tokenCount
+		} else {
+			if current!=""{
+				chunks=append(chunks,IntelligentChunk{
+			    Text:current,
+				Document:docName,
+				Section:section.Title,
+				Level: section.Level,
+				Index:chunkIndex,
+				TokenCount:currentTokens,
+				})
+	            chunkIndex++
+		}
+		current=s
+		currentTokens=tokenCount
+		}
+	}
+	if current!=""{     // сохраняю последний чанк в разделе
+		chunks=append(chunks, IntelligentChunk{
+			Text:current,
+			Document:docName,
+			Section:section.Title,
+			Level:section.Level,
+			Index:chunkIndex,
+			TokenCount:currentTokens,
+		})
+		chunkIndex++
+	}
 }
-
-
+return chunks
+}
