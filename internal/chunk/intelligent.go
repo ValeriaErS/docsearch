@@ -1,6 +1,5 @@
-package main
+package chunk
 import(
-	"fmt"
     "strings"
     "github.com/pkoukk/tiktoken-go"
 )

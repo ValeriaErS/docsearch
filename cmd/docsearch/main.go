@@ -6,6 +6,8 @@ import (
     "docsearch/internal/config"
     "docsearch/internal/rag"
     "time"
+    "docsearch/internal/indexer"
+    "docsearch/internal/vector"
 )
 func main() {
     args:= os.Args[1:]                                          // читаю кроме 1 слова команды
@@ -47,8 +49,19 @@ func main() {
     return
 }
     if needIndex {                                           //есть индексация
-    rag.Index(*cfg)
+   vc,err:=vector.NewQdrantClient()
+   if err!=nil{
+    fmt.Println("ошибка подключения к бд",err)
     return
+   }
+   idx:=index.NewIndexer(cfg,vc)
+   err=idx.Index()
+   if err!=nil{
+    fmt.Println("ошибка индексации",err)
+    return
+   }
+   fmt.Println("Все супер")
+   return
     }
     if question != "" {
     startTime:= time.Now()                                     //время и ищу ответ

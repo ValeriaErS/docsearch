@@ -1,104 +1,102 @@
 package vector
 
 import (
-    "bytes"
     "fmt"
+    "bytes"
+    "encoding/json"
     "net/http"
-    "encoding/json" 
 )
 
-type QdrantClient struct { //хранит настройки подключения к базе
+type QdrantClient struct {
     Host string
     Port int
 }
 
-func NewQdrantClient() *QdrantClient {   //создает новый клиент с настройками по умолчанию
-    return &QdrantClient{
-        Host: "localhost",
-        Port: 6333,
-    }
+func NewQdrantClient() *QdrantClient {
+    return &QdrantClient{Host: "localhost", Port: 6333}
 }
 
-func (q *QdrantClient) url(path string) string {   // собирает полный адрес для запроса
+func (q *QdrantClient) url(path string) string {
     return fmt.Sprintf("http://%s:%d%s", q.Host, q.Port, path)
 }
-
-func (q *QdrantClient) Ping() error {    // проверяет что запущен и отвечает на запросы
-    resp, err := http.Get(q.url("/collections"))
-    if err != nil {
-        return err
-    }
-    defer resp.Body.Close()
-
-    if resp.StatusCode != 200 {
-        return fmt.Errorf("ошибка %d", resp.StatusCode)
+func (q *QdrantClient) Ping() error {    // проверяю работает ли бд
+    r, _:= http.Get(q.url("/collections"))
+    defer r.Body.Close()
+    if r.StatusCode != 200 {
+        return fmt.Errorf("ошибка %d", r.StatusCode)
     }
     return nil
 }
-
-func (q *QdrantClient) CreateCollection(name string, size int) error {
-    resp, err := http.Get(q.url("/collections/" + name)) // проверяю, существует ли коллекция
-    if err != nil {
-        return err
-    }
-    defer resp.Body.Close()
-
-    if resp.StatusCode == 200 {
+func (q *QdrantClient) CreateCollection(name string) error {  // создаю коллекцию
+    r, _:= http.Get(q.url("/collections/" + name))
+    defer r.Body.Close()
+    if r.StatusCode == 200 {
         return nil
     }
 
-    jsonData := []byte(`{"vectors":{"size":` + fmt.Sprint(size) + `,"distance":"Cosine"}}`)
-
-    req, err := http.NewRequest("PUT", q.url("/collections/"+name), bytes.NewBuffer(jsonData))
-    if err != nil {
-        return err
-    }
+    body:= []byte(`{"vectors":{"size":768,"distance":"Cosine"}}`)   // создаю
+    req, _:= http.NewRequest("PUT", q.url("/collections/"+name), bytes.NewBuffer(body))
     req.Header.Set("Content-Type", "application/json")
 
-    client := &http.Client{}
-    resp, err = client.Do(req)
-    if err != nil {
-        return err
-    }
-    defer resp.Body.Close()
+    cl := &http.Client{}
+    r, _ = cl.Do(req)
+    defer r.Body.Close()
 
-    if resp.StatusCode != 200 {
-        return fmt.Errorf("ошибка создания коллекции: %d", resp.StatusCode)
+    if r.StatusCode != 200 {
+        return fmt.Errorf("ошибка %d", r.StatusCode)
     }
     return nil
 }
 
-func (q *QdrantClient) SavePoint(collectionName string, id string, vector []float32, payload map[string]interface{}) error {  // сохраняет один чанк в бд
-    data := map[string]interface{}{
+func (q *QdrantClient) Save(name string, id string, vec []float32, data map[string]interface{}) error { // сохраняю чанк
+    d:= map[string]interface{}{
         "points": []map[string]interface{}{
-            {
-                "id":      id,
-                "vector":  vector,
-                "payload": payload,
-            },
+            {"id": id, "vector": vec, "payload": data},
         },
     }
+    j, _:= json.Marshal(d)
 
-    jsonData, err := json.Marshal(data)
-    if err != nil {
-        return err
-    }
-
-    req, err := http.NewRequest("PUT", q.url("/collections/"+collectionName+"/points"), bytes.NewBuffer(jsonData))
-    if err != nil {
-        return err
-    }
+    req, _:= http.NewRequest("PUT", q.url("/collections/"+name+"/points"), bytes.NewBuffer(j))
     req.Header.Set("Content-Type", "application/json")
 
-    client := &http.Client{}
-    resp, err := client.Do(req)
-    if err != nil {
-        return err
-    }
-    defer resp.Body.Close()
+    cl:= &http.Client{}
+    r, _:= cl.Do(req)
+    defer r.Body.Close()
 
-    if resp.StatusCode != 200 {
-        return fmt.Errorf("ошибка сохранения: %d", resp.StatusCode)
+    if r.StatusCode!= 200 {
+        return fmt.Errorf("ошибка %d", r.StatusCode)
     }
     return nil
+}
+func (q *QdrantClient) Search(name string, vec []float32, limit int) ([]map[string]interface{}, error) {  // ищу похожие
+    d:= map[string]interface{}{
+        "vector": vec,
+        "limit": limit,
+        "with_payload": true,
+    }
+    j, _:= json.Marshal(d)
+
+    req, _:= http.NewRequest("POST", q.url("/collections/"+name+"/points/search"), bytes.NewBuffer(j))
+    req.Header.Set("Content-Type", "application/json")
+
+    cl:= &http.Client{}
+    r, _:= cl.Do(req)
+    defer r.Body.Close()
+
+    var res struct {
+        Result []struct {
+            Id string `json:"id"`
+            Score float64 `json:"score"`
+            Payload map[string]interface{} `json:"payload"`
+        } `json:"result"`
+    }
+    json.NewDecoder(r.Body).Decode(&res)
+
+    out:= []map[string]interface{}{}
+    for _, item:= range res.Result {
+        out = append(out, map[string]interface{}{
+            "id": item.Id, "score": item.Score, "payload": item.Payload,
+        })
+    }
+    return out, nil
 }
