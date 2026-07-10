@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocSearch</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            /*background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);*/
+            background-image: url('https://i.pinimg.com/originals/84/82/79/8482794f5f72ab497bec84be9ef541c9.jpg?nii=t');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            font-family: 'Inter', sans-serif;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .background {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, 
+                rgba(255, 69, 0, 0.15) 0%, 
+                rgba(255, 140, 0, 0.08) 50%, 
+                transparent 100%);
+            pointer-events: none;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 980px;
+            height: 78vh;
+            max-height: 600px;
+            background: rgba(35, 35, 35, 0.28);
+            backdrop-filter: blur(22px);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 48px;
+            padding: 40px 50px 30px;
+            box-shadow: 0 25px 70px rgba(0,0,0,.45),
+0 0 40px rgba(255,140,0,.08);
+
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            font-size: 56px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, #ffffff, #ff8c00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .chat {
+            flex: 1;
+            overflow-y: auto;
+            text-align: left;
+            padding: 10px 6px;
+            margin: 12px 0 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .msg {
+            padding: 14px 20px;
+            border-radius: 20px;
+            max-width: 85%;
+            font-size: 17px;
+            line-height: 1.5;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .msg.user {
+            background: rgba(255, 140, 0, 0.3);
+            align-self: flex-end;
+            margin-left: auto;
+        }
+
+        .msg.bot {
+            background: rgba(255, 255, 255, 0.08);
+            align-self: flex-start;
+        }
+
+        .msg .sources {
+            margin-top: 8px;
+            font-size: 14px;
+            opacity: 0.6;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 14px;
+            margin-top: auto;
+            padding-top: 10px;
+        }
+
+        input {
+            flex: 1;
+            padding: 16px 24px;
+            font-size: 17px;
+            height: 62px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 50px;
+            color: white;
+            outline: none;
+        }
+
+        input::placeholder {
+            color: rgba(255,255,255,0.35);
+        }
+
+        button {
+            padding: 18px 44px;
+            font-size: 18px;
+            font-weight: 500;
+            background: rgba(255, 140, 0, 0.9);
+            border: none;
+            border-radius: 50px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background: #ff8c00;
+            transform: translateY(-2px);
+        }
+
+        .footer {
+            margin-top: 12px;
+            font-size: 16px;
+            opacity: 0.35;
+            font-weight: 300;
+            letter-spacing: 0.5px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+    
+        .chat::-webkit-scrollbar {
+            width: 4px;
+        }
+        .chat::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .chat::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="background"></div>
+
+    <div class="card">
+        <div class="logo">DocSearch</div>
+
+    
+        <div class="chat" id="chat">
+
+    <div class="msg bot">
+        Добро пожаловать, сотрудник СерчИнформ!
+
+        <br><br>
+
+        Я помогу найти информацию в документации.
+
+        <br><br>
+
+        Просто задайте вопрос, и я найду ответ среди загруженных документов.
+    </div>
+
+</div>
+
+        
+        <div class="input-container">
+            <input type="text" id="question" placeholder="Напиши свой вопрос...">
+            <button id="sendBtn">Отправить</button>
+        </div>
+
+        <div class="footer">DOCSEARCH — твой локальный RAG</div>
+    </div>
+
+    <script>
+        const chat = document.getElementById('chat');
+        const input = document.getElementById('question');
+        const btn = document.getElementById('sendBtn');
+
+        function addMessage(text, isUser, sources) {
+            const msg = document.createElement('div');
+            msg.className = `msg ${isUser ? 'user' : 'bot'}`;
+            msg.textContent = text;
+
+            if (sources && sources.length) {
+                const src = document.createElement('div');
+                src.className = 'sources';
+                const names = sources.map(s => s.doc_id).join(', ');
+                src.textContent = `Источники: ${names}`;
+                msg.appendChild(src);
+            }
+
+            chat.appendChild(msg);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        async function sendQuestion() {
+            const q = input.value.trim();
+            if (!q) return;
+
+            addMessage(q, true);
+            input.value = '';
+
+            const wait = document.createElement('div');
+            wait.className = 'msg bot';
+            wait.textContent = 'Ищу...';
+            wait.style.opacity = '0.6';
+            chat.appendChild(wait);
+            chat.scrollTop = chat.scrollHeight;
+
+            try {
+                const res = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: q })
+                });
+
+                const data = await res.json();
+                chat.removeChild(wait);
+
+                if (data.answer) {
+                    addMessage(data.answer, false, data.sources || []);
+                } else {
+                    addMessage('В документации такой информации не найдено.', false);
+                }
+            } catch (e) {
+                chat.removeChild(wait);
+                addMessage('Ошибка соединения с сервером.', false);
+            }
+        }
+
+        btn.addEventListener('click', sendQuestion);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendQuestion();
+        });
+    </script>
+</body>
+</html>

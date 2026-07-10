@@ -3,7 +3,7 @@ corpus:
     formats: ["md", "txt", "pdf", "html"]
 
 chunking:
-    max_tokens: 512
+    max_tokens: 1024
     overlap_tokens: 64
 
 embeddings:

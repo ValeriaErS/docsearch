@@ -32,6 +32,8 @@ func main() {
         } else if args[i] == "--out" && i+1 < len(args) {
             outFile = args[i+1]
             i = i + 1
+        } else if args[i]=="web"{
+            serveMode=true
         } else if args[i] == "--serve" {
             serveMode = true
         } else if args[i] == "--port" && i+1 < len(args) {
@@ -47,7 +49,7 @@ func main() {
     }
 
     if serveMode {  // если запускаю сервер
-        runServe(configFile, port)
+        runWeb(cfg, port)
         return
     }
 
@@ -143,6 +145,7 @@ func main() {
     fmt.Println("index - индексация документов")
     fmt.Println("ask 'текст'- поиск по документации")
     fmt.Println("ask 'текст' --out file.json - сохранить результат в JSON")
-    fmt.Println("--serve - запустить HTTP сервер")
-    fmt.Println("--port :8080 - порт для сервера")
+    fmt.Println("serve - запустить HTTP сервер")
+    fmt.Println("port :8080 - порт для сервера")
+    fmt.Println("web - запустить веб-интерфейс")
 }
