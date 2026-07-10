@@ -1,13 +1,12 @@
-// indexer.go — сохраняю документы в Qdrant
 package indexer
 
 import (
+	"fmt"
     "crypto/sha256"
     "encoding/hex"
     "encoding/json"
-    "fmt"
     "os"
-
+    "github.com/google/uuid"
     "docsearch/internal/chunk"
     "docsearch/internal/config"
     "docsearch/internal/corpus"
@@ -15,49 +14,49 @@ import (
     "docsearch/internal/vector"
 )
 
-type Indexer struct {
-    Config       *config.Config
+type Indexer struct {  //структура индексации
+    Config *config.Config
     VectorClient *vector.QdrantClient
-    IndexPath    string
+    IndexPath string
 }
 
-func NewIndexer(cfg *config.Config, vc *vector.QdrantClient) *Indexer {
+func NewIndexer(cfg *config.Config, vc *vector.QdrantClient) *Indexer {  //новый индексер
     return &Indexer{
-        Config:       cfg,
-        VectorClient: vc,
-        IndexPath:    "./.docsearch_index.json",
+        Config:cfg,
+        VectorClient:vc,
+        IndexPath:"./.docsearch_index.json",
     }
 }
 
-// главная функция
 func (i *Indexer) Index() error {
-    // читаю все документы
-    docs, err := corpus.LoadDocuments(i.Config.Corpus.Path)
+    err := i.VectorClient.CreateCollection("documents")   // создаю коллекцию
+    if err != nil {
+        return fmt.Errorf("ошибка создания коллекции: %w", err)
+    }
+
+    docs, err := corpus.LoadDocuments(i.Config.Corpus.Path)  // загружаю документы из папки
     if err != nil {
         return err
     }
 
-    // читаю старые хеши
-    old := map[string]string{}
+    old := map[string]string{}    // читаю старые хеши из файла
     data, _ := os.ReadFile(i.IndexPath)
     json.Unmarshal(data, &old)
 
-    // для каждого документа смотрю, изменился ли он
     for _, doc := range docs {
-        h := hashText(doc.Text)
+        hash := hashText(doc.Text)
 
-        if old[doc.Name] != h {
+        if old[doc.Name] != hash {    // если хеш изменился или документа не было индексирую
             fmt.Println("Индексирую:", doc.Name)
-            deleteDoc(i.VectorClient, doc.Name)
-            saveDoc(i.VectorClient, doc, i.Config.Chunking.MaxTokens)
-            old[doc.Name] = h
+            i.deleteDoc(doc.Name)  // удаляю старые чанки
+            i.saveDoc(doc)
+            old[doc.Name] = hash   
         } else {
-            fmt.Println("Пропускаю:", doc.Name)
+            fmt.Println("Без изменений:", doc.Name)
         }
     }
 
-    // удаляю документы, которых нет в папке
-    for name := range old {
+    for name := range old { // проверка не удалили ли какие то документы 
         found := false
         for _, doc := range docs {
             if doc.Name == name {
@@ -66,45 +65,55 @@ func (i *Indexer) Index() error {
             }
         }
         if !found {
-            fmt.Println("Удаляю:", name)
-            deleteDoc(i.VectorClient, name)
+            fmt.Println("Удалён:", name)
+            i.deleteDoc(name)
             delete(old, name)
         }
     }
 
-    // сохраняю новые хеши
     data, _ = json.MarshalIndent(old, "", "  ")
     os.WriteFile(i.IndexPath, data, 0644)
 
     return nil
 }
 
-// сохраняю один документ
-func saveDoc(vc *vector.QdrantClient, doc corpus.Document, maxTokens int) {
-    chunks := chunk.SplitIntelligent(doc.Text, doc.Name, maxTokens)
+func (i *Indexer) saveDoc(doc corpus.Document) {
+    chunks := chunk.SplitIntelligent(doc.Text, doc.Name, i.Config.Chunking.MaxTokens)
 
-    for i := 0; i < len(chunks); i++ {
-        ch := chunks[i]
-        vec, _ := embed.GetEmbedding(ch.Text)
-
-        id := doc.Name + "_" + string(rune(i))
-        data := map[string]interface{}{
-            "doc_id":     doc.Name,
-            "chunk_text": ch.Text,
-            "section":    ch.Section,
-            "level":      ch.Level,
+    for _, ch := range chunks {
+        vec, err := embed.GetEmbedding(ch.Text)  // получаю эмбеддинг
+        if err != nil {
+            fmt.Println("Ошибка эмбеддинга:", err)
+            continue
         }
-        vc.UpsertPoint("documents", id, vec, data)
+
+        vec32 := []float32{}
+        for _, v := range vec {
+            vec32 = append(vec32, float32(v))
+        }
+
+        id := uuid.New().String()
+        data := map[string]interface{}{
+            "doc_id": doc.Name,
+            "chunk_text": ch.Text,
+            "section": ch.Section,
+            "level": ch.Level,
+            "token_count": ch.TokenCount,
+        }
+
+        err = i.VectorClient.Save("documents", id, vec32, data)
+        if err != nil {
+            fmt.Println("Ошибка сохранения:", err)
+        }
     }
 }
 
-// удаляю документ
-func deleteDoc(vc *vector.QdrantClient, name string) {
-    vc.DeletePoints("documents", map[string]interface{}{"doc_id": name})
+func (i *Indexer) deleteDoc(name string) {  //удаляю все чанки дока из бд
+    filter := map[string]interface{}{"doc_id": name}
+    i.VectorClient.Delete("documents", filter)
 }
 
-// считаю хеш
-func hashText(text string) string {
-    h := sha256.Sum256([]byte(text))
+func hashText(text string) string {   //считаю хеш текста
+    h:= sha256.Sum256([]byte(text))
     return hex.EncodeToString(h[:])
 }
