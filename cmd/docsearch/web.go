@@ -10,7 +10,11 @@ import (
     "docsearch/internal/config"
 )
 
-func runWeb(cfg *config.Config, port string) {     //запуск сервера
+func runWeb(cfg *config.Config, port string, userID string) {     //запуск сервера
+    if userID==""{
+        userID="default"
+    }
+    fmt.Println("Пользователь:",userID)
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
         http.ServeFile(w, r, "web/index.html")
     })

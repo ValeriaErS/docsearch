@@ -19,6 +19,7 @@ func main() {
     outFile := ""
     serveMode := false
     port := ":8080"
+    userID := ""
 
     for i := 0; i < len(args); i++ {   // разбираю команды
         if args[i] == "--config" && i+1 < len(args) {
@@ -39,6 +40,9 @@ func main() {
         } else if args[i] == "--port" && i+1 < len(args) {
             port = args[i+1]
             i = i + 1
+        } else if args[i]=="--user" && i+1<len(args){
+            userID=args[i+1]
+            i = i + 1
         }
     }
 
@@ -49,7 +53,7 @@ func main() {
     }
 
     if serveMode {  // если запускаю сервер
-        runWeb(cfg, port)
+        runWeb(cfg, port, userID)
         return
     }
 
