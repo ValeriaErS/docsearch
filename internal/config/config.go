@@ -8,32 +8,33 @@ import (
 
 type Config struct {
 	Corpus struct {
-		Path    string   `yaml:"path"`
+		Path string `yaml:"path"`
 		Formats []string `yaml:"formats"`
 	} `yaml:"corpus"`
 
 	Chunking struct {
-		MaxTokens     int `yaml:"max_tokens"`
+		MaxTokens int `yaml:"max_tokens"`
 		OverlapTokens int `yaml:"overlap_tokens"`
 	} `yaml:"chunking"`
 
 	Embeddings struct {
 		Provider string `yaml:"provider"`
-		Model    string `yaml:"model"`
-		BaseURL  string `yaml:"base_url"`
+		Model string `yaml:"model"`
+		BaseURL string `yaml:"base_url"`
+		VectorSize int    `yaml:"vector_size"`
 	} `yaml:"embeddings"`
 
 	Retrieval struct {
-		TopK     int     `yaml:"top_k"`
+		TopK int `yaml:"top_k"`
 		MinScore float64 `yaml:"min_score"`
 	} `yaml:"retrieval"`
 
 	LLM struct {
-		Provider    string  `yaml:"provider"`
-		Model       string  `yaml:"model"`
-		BaseURL     string  `yaml:"base_url"`
+		Provider string  `yaml:"provider"`
+		Model string  `yaml:"model"`
+		BaseURL string  `yaml:"base_url"`
 		Temperature float64 `yaml:"temperature"`
-		MaxTokens   int     `yaml:"max_tokens"`
+		MaxTokens int `yaml:"max_tokens"`
 	} `yaml:"llm"`
 }
 

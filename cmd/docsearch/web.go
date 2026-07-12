@@ -31,7 +31,7 @@ func runWeb(cfg *config.Config, port string) {     //запуск сервера
             return
         }
 
-        answer, sources := findAnswer(req.Query)
+       answer, sources := findAnswer(req.Query)
 
         w.Header().Set("Content-Type", "application/json")     // отправляю ответ
         json.NewEncoder(w).Encode(map[string]interface{}{
@@ -46,6 +46,8 @@ func runWeb(cfg *config.Config, port string) {     //запуск сервера
 
 func findAnswer(question string) (string, []map[string]interface{}) {   //ищет ответ на вопрос в документации
     client := vector.NewQdrantClient()
+    client.VectorSize = 999
+   
 
     vec, err := embed.GetEmbedding(question)
     if err != nil {

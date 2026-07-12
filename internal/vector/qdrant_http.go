@@ -11,6 +11,7 @@ import (
 type QdrantClient struct {
     Host string
     Port int
+    VectorSize int
 }
 
 func NewQdrantClient() *QdrantClient {   // создаю нового клиента
@@ -37,7 +38,7 @@ func (q *QdrantClient) CreateCollection(name string) error {  // создаю к
         return nil
     }
 
-    body:= []byte(`{"vectors":{"size":768,"distance":"Cosine"}}`)
+    body:= []byte(`{"vectors":{"size":` + fmt.Sprint(q.VectorSize) + `,"distance":"Cosine"}}`)
     req, _ := http.NewRequest("PUT", q.url("/collections/"+name), bytes.NewBuffer(body))
     req.Header.Set("Content-Type", "application/json")
 
@@ -52,6 +53,10 @@ func (q *QdrantClient) CreateCollection(name string) error {  // создаю к
 }
 
 func (q *QdrantClient) Save(name string, id string, vec []float32, data map[string]interface{}) error {  // сохраняю один чанк в бд
+     fmt.Printf("Размер вектора: %d, ожидается: %d\n", len(vec), q.VectorSize)
+    if len(vec)!=q.VectorSize{
+        return fmt.Errorf("Размер вектора %d, ожидается %d", len(vec), q.VectorSize)
+    }
     d := map[string]interface{}{
         "points": []map[string]interface{}{
             {"id": id, "vector": vec, "payload": data},

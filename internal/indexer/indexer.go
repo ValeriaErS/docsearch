@@ -91,6 +91,7 @@ func (i *Indexer) saveDoc(doc corpus.Document) {
         for _, v := range vec {
             vec32 = append(vec32, float32(v))
         }
+        fmt.Println("Сохраняю чанк, размер вектора:", len(vec32))
 
         id := uuid.New().String()
         data := map[string]interface{}{

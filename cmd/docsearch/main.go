@@ -54,7 +54,9 @@ func main() {
     }
 
     if needIndex {   // если нада индексировать
+        fmt.Println("Передаю размер в индексер:", cfg.Embeddings.VectorSize) 
         vc := vector.NewQdrantClient()
+        vc.VectorSize=cfg.Embeddings.VectorSize
         idx := indexer.NewIndexer(cfg, vc)
         err = idx.Index()
         if err != nil {

@@ -10,6 +10,7 @@ embeddings:
     provider: "local"
     model: "text-embedding-nomic-embed-text-v1.5"
     base_url: "http://127.0.0.1:1234"
+    vector_size: 999
 
 retrieval:
     top_k: 5
