@@ -87,11 +87,21 @@ func (q *QdrantClient) Save(name string, id string, vec []float32, data map[stri
     return nil
 }
 
-func (q *QdrantClient) Search(name string, vec []float32, limit int) ([]map[string]interface{}, error) {   // ищу похожие чанки
+func (q *QdrantClient) Search(name string, vec []float32, limit int, userID string) ([]map[string]interface{}, error) {   // ищу похожие чанки
     d := map[string]interface{}{
-        "vector":       vec,
-        "limit":        limit,
+        "vector": vec,
+        "limit": limit,
         "with_payload": true,
+        "filter": map[string]interface{}{
+            "must": []map[string]interface{}{
+                {
+                    "key": "user_id",
+                    "match": map[string]interface{}{
+                        "value": userID,
+                    },
+                },
+            },
+        },
     }
     j, _ := json.Marshal(d)
 

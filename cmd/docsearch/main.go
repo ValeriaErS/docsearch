@@ -61,7 +61,7 @@ func main() {
         fmt.Println("Передаю размер в индексер:", cfg.Embeddings.VectorSize) 
         vc := vector.NewQdrantClient()
         vc.VectorSize=cfg.Embeddings.VectorSize
-        idx := indexer.NewIndexer(cfg, vc)
+        idx := indexer.NewIndexer(cfg, vc, userID)
         err = idx.Index()
         if err != nil {
             fmt.Println("Ошибка индексации:", err)

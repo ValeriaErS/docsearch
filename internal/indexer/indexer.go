@@ -18,13 +18,15 @@ type Indexer struct {  //структура индексации
     Config *config.Config
     VectorClient *vector.QdrantClient
     IndexPath string
+    UserID string
 }
 
-func NewIndexer(cfg *config.Config, vc *vector.QdrantClient) *Indexer {  //новый индексер
+func NewIndexer(cfg *config.Config, vc *vector.QdrantClient, userID string) *Indexer {  //новый индексер
     return &Indexer{
         Config:cfg,
         VectorClient:vc,
         IndexPath:"./.docsearch_index.json",
+        UserID:userID,
     }
 }
 
@@ -100,6 +102,7 @@ func (i *Indexer) saveDoc(doc corpus.Document) {
             "section": ch.Section,
             "level": ch.Level,
             "token_count": ch.TokenCount,
+            "user_id": i.UserID, 
         }
 
         err = i.VectorClient.Save("documents", id, vec32, data)

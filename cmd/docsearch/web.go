@@ -35,7 +35,7 @@ func runWeb(cfg *config.Config, port string, userID string) {     //запуск
             return
         }
 
-       answer, sources := findAnswer(req.Query)
+       answer, sources := findAnswer(req.Query, userID)
 
         w.Header().Set("Content-Type", "application/json")     // отправляю ответ
         json.NewEncoder(w).Encode(map[string]interface{}{
@@ -48,7 +48,8 @@ func runWeb(cfg *config.Config, port string, userID string) {     //запуск
     http.ListenAndServe(port, nil)
 }
 
-func findAnswer(question string) (string, []map[string]interface{}) {   //ищет ответ на вопрос в документации
+func findAnswer(question string, userID string) (string, []map[string]interface{}) {   //ищет ответ на вопрос в документации
+    fmt.Println("Поиск для пользователя",userID)
     client := vector.NewQdrantClient()
     client.VectorSize = 999
    
@@ -63,7 +64,7 @@ func findAnswer(question string) (string, []map[string]interface{}) {   //ище
         vec32 = append(vec32, float32(v))
     }
 
-    results, err := client.Search("documents", vec32, 10)   // ищу похожие чанки
+    results, err := client.Search("documents", vec32, 10, userID)   // ищу похожие чанки
     if err != nil || len(results) == 0 {
         return "Ничего не нашла", nil
     }
@@ -93,6 +94,7 @@ for _, s := range sources {
 sources = uniqueSources
     answer, err := llm.GetAnswer(question, context)    // отправляю в llm
     if err != nil {
+         fmt.Println("Ошибка LLM:", err) 
         return "Ошибка: нейросеть не отвечает", sources
     }
 
