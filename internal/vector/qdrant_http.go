@@ -92,7 +92,10 @@ func (q *QdrantClient) Search(name string, vec []float32, limit int, userID stri
         "vector": vec,
         "limit": limit,
         "with_payload": true,
-        "filter": map[string]interface{}{
+        }
+
+    if userID != "" && userID != "admin" {
+        d["filter"] = map[string]interface{}{
             "must": []map[string]interface{}{
                 {
                     "key": "user_id",
@@ -101,7 +104,7 @@ func (q *QdrantClient) Search(name string, vec []float32, limit int, userID stri
                     },
                 },
             },
-        },
+        }
     }
     j, _ := json.Marshal(d)
 

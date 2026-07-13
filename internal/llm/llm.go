@@ -7,14 +7,15 @@ import (
     "io"
     "net/http"
     "os"
+    "regexp"
     "github.com/joho/godotenv"
+    "strings"
 )
 
 func init() {  //ключик из env
     godotenv.Load()
 }
-
-func GetAnswer(question string, chunks []string) (string, error) {  //отправляет вопрос в llm
+func GetAnswerWithHistory(question string,chunks []string, history []map[string]string) (string, error) {  //отправляет вопрос в llm
     apiKey := os.Getenv("LLM_API_KEY")
     if apiKey == "" {
         return "", fmt.Errorf("нет ключа")
@@ -26,19 +27,30 @@ func GetAnswer(question string, chunks []string) (string, error) {  //отпра
     for i := 0; i < len(chunks); i++ {
         context = context + fmt.Sprintf("\n[%d] %s", i+1, chunks[i])
     }
+    messages := []map[string]string{}
 
-    prompt := fmt.Sprintf(`Ты помощник. Отвечай на вопрос, используя только информацию из документов ниже.
-    Если в документах нет ответа, скажи, что не знаешь.
-    В конце укажи источники в формате [1], [2] и т.д.
-    Контекст из документов: %s
-    Вопрос: %s
-    Ответ:`, context, question)
+   messages = append(messages, map[string]string{
+        "role": "system",
+        "content": "Ты помощник. Отвечай по документам. Если не знаешь, скажи. Указывай источники [1], [2]. Контекст: " + context,
+    })
+    start:=0
+    if len(history)>6{
+        start=len(history)-6
+    }
+    for i:=start;i<len(history);i++{
+        messages=append(messages,history[i])
+    }
+if len(history)==0 || history[len(history)-1]["content"]!=question{
+    messages=append(messages,map[string]string{
+        "role": "user",
+        "content": question,
+    })
+}
+
 
     data := map[string]interface{}{    // тело запроса
         "model": "openrouter/free",
-        "messages": []map[string]string{
-            {"role": "user", "content": prompt},
-        },
+        "messages": messages,
         "temperature": 0.1,
         "max_tokens": 1024,
     }
@@ -91,5 +103,29 @@ func GetAnswer(question string, chunks []string) (string, error) {  //отпра
         return "", fmt.Errorf("нет ответа от модели")
     }
 
-    return result.Choices[0].Message.Content, nil
+    answer:=result.Choices[0].Message.Content
+    answer=strings.ReplaceAll(answer, "**", "")
+    answer = strings.ReplaceAll(answer, "*", "")
+    
+for i:=1;i<=10;i++{
+    old:=fmt.Sprintf("%d.", i)
+    new:=fmt.Sprintf ("\n%d.", i)
+    answer=strings.ReplaceAll(answer,old,new)
+}
+    answer=strings.ReplaceAll(answer,"Источники:", "\n\nИсточники:")
+    answer = strings.ReplaceAll(answer, "Таким образом,", "\n\nТаким образом,")
+    answer = strings.ReplaceAll(answer, "Как это работает:", "\n\nКак это работает:")
+    answer = strings.ReplaceAll(answer, "Назначение:", "\n\nНазначение:")
+    answer = strings.ReplaceAll(answer, "Роль", "\nРоль")
+    answer = strings.ReplaceAll(answer, "Обработка", "\nОбработка")
+    answer = strings.ReplaceAll(answer, "Передача", "\nПередача")
+
+    answer=strings.TrimSpace(answer)
+    re := regexp.MustCompile(`\n{3,}`)
+    answer = re.ReplaceAllString(answer, "\n\n")
+    return answer,nil
+}
+// GetAnswer - для совместимости со старым кодом
+func GetAnswer(question string, chunks []string) (string, error) {
+    return GetAnswerWithHistory(question, chunks, []map[string]string{})
 }

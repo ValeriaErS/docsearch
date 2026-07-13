@@ -8,13 +8,20 @@ import (
     "docsearch/internal/llm"
     "docsearch/internal/vector"
     "docsearch/internal/config"
+    "net"
 )
+var chatHistory=make(map[string][]map[string]string)
 
 func runWeb(cfg *config.Config, port string, userID string) {     //запуск сервера
     if userID==""{
         userID="default"
     }
     fmt.Println("Пользователь:",userID)
+
+if chatHistory[userID]==nil{
+    chatHistory[userID]=[]map[string]string{}
+}
+
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
         http.ServeFile(w, r, "web/index.html")
     })
@@ -34,8 +41,17 @@ func runWeb(cfg *config.Config, port string, userID string) {     //запуск
             http.Error(w, "Пустой вопрос", http.StatusBadRequest)
             return
         }
+        chatHistory[userID]=append(chatHistory[userID],map [string]string{
+            "role": "user",
+            "content": req.Query,
+        })
 
        answer, sources := findAnswer(req.Query, userID)
+
+       chatHistory[userID]=append(chatHistory[userID],map[string]string{
+        "role": "assistant",
+        "content": answer,
+       })
 
         w.Header().Set("Content-Type", "application/json")     // отправляю ответ
         json.NewEncoder(w).Encode(map[string]interface{}{
@@ -43,10 +59,28 @@ func runWeb(cfg *config.Config, port string, userID string) {     //запуск
             "sources": sources,
         })
     })
+    fullAddress:="0.0.0.0" + port
 
     fmt.Println("Сайт запущен: http://localhost" + port)
-    http.ListenAndServe(port, nil)
+     fmt.Println("В сети: http://" + getLocalIP() + port)
+    http.ListenAndServe(fullAddress, nil)
 }
+func getLocalIP() string{
+    addrs,err:=net.InterfaceAddrs()
+    if err!=nil{
+        return "localhost"
+    }
+    for _, addr:=range addrs{
+        if ipnet,ok:=addr.(*net.IPNet);ok && !ipnet.IP.IsLoopback(){
+           if ipnet.IP.To4() != nil {
+                return ipnet.IP.String() 
+           }
+        }
+    }
+    return "localhost"
+}
+
+
 
 func findAnswer(question string, userID string) (string, []map[string]interface{}) {   //ищет ответ на вопрос в документации
     fmt.Println("Поиск для пользователя",userID)
@@ -92,7 +126,9 @@ for _, s := range sources {
     }
 }
 sources = uniqueSources
-    answer, err := llm.GetAnswer(question, context)    // отправляю в llm
+
+
+    answer, err := llm.GetAnswerWithHistory(question, context, chatHistory[userID])    // отправляю в llm
     if err != nil {
          fmt.Println("Ошибка LLM:", err) 
         return "Ошибка: нейросеть не отвечает", sources
