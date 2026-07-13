@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DocSearch</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -14,21 +14,19 @@
         }
 
         body {
-            min-height: 100vh;
-            /*background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);*/
+            margin: 0;
+            width: 100%;
+            min-height: 100dvh;
             background-image: url('https://i.pinimg.com/originals/84/82/79/8482794f5f72ab497bec84be9ef541c9.jpg?nii=t');
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
-            font-family: 'Inter', sans-serif;
-            color: white;
             display: flex;
             justify-content: center;
             align-items: center;
             overflow: hidden;
-            position: relative;
-            margin: 0;
-            padding: 20px;
+            font-family: 'Inter', sans-serif;
+            color: white;
         }
 
         .background {
@@ -42,22 +40,21 @@
         }
 
         .card {
-            width: 100%;
-            max-width: 980px;
-            height: 78vh;
-            max-height: 600px;
+            width: calc(100% - 32px);
+            max-width: 1060px;
+            height: calc(100dvh - 32px);
+            max-height: 700px;
             background: rgba(35, 35, 35, 0.28);
             backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
             border: 1px solid rgba(255,255,255,0.12);
             border-radius: 48px;
             padding: 40px 50px 30px;
-            box-shadow: 0 25px 70px rgba(0,0,0,.45),
-0 0 40px rgba(255,140,0,.08);
-
+            box-shadow: 0 25px 70px rgba(0,0,0,.45), 0 0 40px rgba(255,140,0,.08);
             text-align: center;
-            border: 1px solid rgba(255,255,255,0.08);
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
 
         .logo {
@@ -68,6 +65,9 @@
             background: linear-gradient(90deg, #ffffff, #ff8c00);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+            flex-shrink: 0;
         }
 
         .chat {
@@ -79,6 +79,7 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
+            min-height: 0;
         }
 
         .msg {
@@ -88,6 +89,7 @@
             font-size: 17px;
             line-height: 1.5;
             animation: fadeIn 0.25s ease;
+            word-wrap: break-word;
         }
 
         .msg.user {
@@ -110,8 +112,18 @@
         .input-container {
             display: flex;
             gap: 14px;
-            margin-top: auto;
             padding-top: 10px;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 10;
+            background: transparent;
+        }
+
+        .input-wrapper {
+            display: flex;
+            width: 100%;
+            position: relative;
+            align-items: center;
         }
 
         input {
@@ -124,6 +136,8 @@
             border-radius: 50px;
             color: white;
             outline: none;
+            width: 100%;
+            font-family: 'Inter', sans-serif;
         }
 
         input::placeholder {
@@ -141,11 +155,22 @@
             cursor: pointer;
             transition: all 0.3s;
             white-space: nowrap;
+            font-family: 'Inter', sans-serif;
+            flex-shrink: 0;
+            height: 62px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         button:hover {
             background: #ff8c00;
             transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
         }
 
         .footer {
@@ -154,6 +179,7 @@
             opacity: 0.35;
             font-weight: 300;
             letter-spacing: 0.5px;
+            flex-shrink: 0;
         }
 
         @keyframes fadeIn {
@@ -161,7 +187,6 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-    
         .chat::-webkit-scrollbar {
             width: 4px;
         }
@@ -172,6 +197,216 @@
             background: rgba(255,255,255,0.2);
             border-radius: 4px;
         }
+
+       
+        @media (max-width: 768px) {
+            body {
+                padding: 16px;
+                overflow: hidden;
+                height: 100vh;
+                height: 100dvh;
+                background-image: url('https://i.pinimg.com/1200x/19/80/cd/1980cd2f05ca1aac3e02d569221649af.jpg');
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+            }
+
+            .card {
+                padding: 20px 16px 16px;
+                border-radius: 32px;
+                height: 78vh;
+                height: 78dvh;
+                max-height: none;
+                max-width: 92%;
+                aspect-ratio: 1 / 1;
+                background: rgba(35, 35, 35, 0.22);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                border: 1px solid rgba(255,255,255,0.08);
+                box-shadow: 0 15px 40px rgba(0,0,0,.35), 0 0 30px rgba(255,140,0,.05);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                overflow: hidden;
+            }
+
+            .logo {
+                font-size: 34px;
+                margin-bottom: 12px;
+                text-align: center;
+                flex-shrink: 0;
+            }
+
+            .chat {
+                padding: 6px 2px;
+                margin: 6px 0 10px;
+                gap: 6px;
+                flex: 1;
+                overflow-y: auto;
+                min-height: 0;
+            }
+
+            .msg {
+                font-size: 14px;
+                padding: 10px 14px;
+                max-width: 92%;
+                border-radius: 16px;
+            }
+
+            .msg .sources {
+                font-size: 11px;
+            }
+
+            .input-container {
+                gap: 0;
+                padding-top: 6px;
+                flex-shrink: 0;
+                position: relative;
+                z-index: 10;
+                background: transparent;
+            }
+
+            .input-wrapper {
+                display: flex;
+                width: 100%;
+                position: relative;
+                align-items: center;
+            }
+
+            .input-wrapper input {
+                width: 100%;
+                height: 48px;
+                padding: 0 55px 0 18px;
+                font-size: 15px;
+                border-radius: 40px;
+                background: rgba(0, 0, 0, 0.4);
+                border: 1px solid rgba(255,255,255,0.1);
+                color: white;
+                outline: none;
+                font-family: 'Inter', sans-serif;
+            }
+
+            .input-wrapper input::placeholder {
+                color: rgba(255,255,255,0.35);
+            }
+
+            .input-wrapper button {
+                position: absolute;
+                right: 6px;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 40px;
+                height: 40px;
+                padding: 0;
+                font-size: 18px;
+                border-radius: 50%;
+                min-width: auto;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                line-height: 1;
+                background: rgba(255, 140, 0, 0.9);
+                border: none;
+                color: white;
+                cursor: pointer;
+                font-family: 'Inter', sans-serif;
+                flex-shrink: 0;
+                transition: none;
+                z-index: 20;
+            }
+
+            .input-wrapper button:active {
+                transform: translateY(-50%) scale(0.95);
+            }
+
+            .footer {
+                font-size: 11px;
+                margin-top: 6px;
+                flex-shrink: 0;
+            }
+        }
+
+        
+        @media (max-width: 480px) {   //телефон
+            body {
+                margin: 0;
+                width: 100%;
+                min-height: 100dvh;
+                background-image: url('https://i.pinimg.com/1200x/19/80/cd/1980cd2f05ca1aac3e02d569221649af.jpg');
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                overflow: hidden;
+                font-family: 'Inter', sans-serif;
+                color: white;
+                padding: 8px;
+            }
+
+            .card {
+                padding: 16px 12px 12px;
+                border-radius: 24px;
+                height: 74vh;
+                height: 74dvh;
+                max-width: 96%;
+                aspect-ratio: 1 / 1;
+                background: rgba(35, 35, 35, 0.2);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                border: 1px solid rgba(255,255,255,0.06);
+                box-shadow: 0 10px 30px rgba(0,0,0,.3), 0 0 20px rgba(255,140,0,.03);
+            }
+
+            .logo {
+                font-size: 28px;
+                margin-bottom: 10px;
+            }
+
+            .chat {
+                padding: 4px 2px;
+                margin: 4px 0 8px;
+                gap: 4px;
+            }
+
+            .msg {
+                font-size: 13px;
+                padding: 8px 12px;
+                max-width: 94%;
+                border-radius: 14px;
+            }
+
+            .msg .sources {
+                font-size: 10px;
+                margin-top: 4px;
+            }
+
+            .input-container {
+                gap: 0;
+                padding-top: 4px;
+            }
+
+            .input-wrapper input {
+                height: 40px;
+                padding: 0 44px 0 14px;
+                font-size: 14px;
+                border-radius: 30px;
+            }
+
+            .input-wrapper button {
+                width: 32px;
+                height: 32px;
+                font-size: 14px;
+                right: 4px;
+                border-radius: 50%;
+            }
+
+            .footer {
+                font-size: 10px;
+                margin-top: 4px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -180,27 +415,21 @@
     <div class="card">
         <div class="logo">DocSearch</div>
 
-    
         <div class="chat" id="chat">
+            <div class="msg bot">
+                Добро пожаловать, сотрудник СерчИнформ!
+                <br><br>
+                Я помогу найти информацию в документации.
+                <br><br>
+                Просто задайте вопрос, и я найду ответ среди загруженных документов.
+            </div>
+        </div>
 
-    <div class="msg bot">
-        Добро пожаловать, сотрудник СерчИнформ!
-
-        <br><br>
-
-        Я помогу найти информацию в документации.
-
-        <br><br>
-
-        Просто задайте вопрос, и я найду ответ среди загруженных документов.
-    </div>
-
-</div>
-
-        
         <div class="input-container">
-            <input type="text" id="question" placeholder="Напиши свой вопрос...">
-            <button id="sendBtn">Отправить</button>
+            <div class="input-wrapper">
+                <input type="text" id="question" placeholder="Напиши свой вопрос...">
+                <button id="sendBtn">➜</button>
+            </div>
         </div>
 
         <div class="footer">DOCSEARCH — твой локальный RAG</div>
