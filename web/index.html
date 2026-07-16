@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DocSearch</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;700&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
         * {
             margin: 0;
             padding: 0;
@@ -14,488 +13,226 @@
         }
 
         body {
-            margin: 0;
-            width: 100%;
-            min-height: 100dvh;
-            background-image: url('https://i.pinimg.com/originals/84/82/79/8482794f5f72ab497bec84be9ef541c9.jpg?nii=t');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            height: 100vh;
             overflow: hidden;
             font-family: 'Inter', sans-serif;
-            color: white;
+            background: url('https://i.pinimg.com/736x/1f/14/f9/1f14f994d524cdf3feff1c682f23b6ef.jpg');
+            background-size: cover;
+            background-position: center;
+            position: relative;
         }
 
-        .background {
+        .overlay {
             position: absolute;
             inset: 0;
-            background: linear-gradient(90deg, 
-                rgba(255, 69, 0, 0.15) 0%, 
-                rgba(255, 140, 0, 0.08) 50%, 
-                transparent 100%);
-            pointer-events: none;
+            background: linear-gradient(90deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.05));
         }
 
-        .card {
-            width: calc(100% - 32px);
-            max-width: 1060px;
-            height: calc(100dvh - 32px);
-            max-height: 700px;
-            background: rgba(35, 35, 35, 0.28);
-            backdrop-filter: blur(22px);
-            -webkit-backdrop-filter: blur(22px);
-            border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 48px;
-            padding: 40px 50px 30px;
-            box-shadow: 0 25px 70px rgba(0,0,0,.45), 0 0 40px rgba(255,140,0,.08);
-            text-align: center;
+        header {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            right: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 20;
+        }
+
+        .brand {
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .menu {
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            gap: 10px;
+            cursor: pointer;
         }
 
-        .logo {
-            font-size: 56px;
-            font-weight: 700;
+        .menu span {
+            width: 54px;
+            height: 3px;
+            background: white;
+            border-radius: 30px;
+        }
+
+        .side-item {
+            position: absolute;
+            z-index: 25;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            color: white;
+            opacity: .65;
+        }
+
+        .side-item span {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            font-size: 18px;
+            font-weight: 300;
             letter-spacing: 2px;
-            margin-bottom: 20px;
-            background: linear-gradient(90deg, #ffffff, #ff8c00);
+        }
+
+        .side-item .line {
+            width: 1px;
+            height: 70px;
+            background: rgba(255, 255, 255, .35);
+        }
+
+        .lera { left: 38px; top: 165px; }
+        .rag { left: 38px; top: 330px; }
+        .ai { left: 245px; bottom: 75px; }
+
+        .glass {
+            position: absolute;
+            top: 50%;
+            left: 37%;
+            transform: translate(-50%, -50%);
+            width: 640px;
+            height: 330px;
+            padding: 55px 55px;
+            border-radius: 34px;
+            background: rgba(255, 255, 255, .08);
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+            border: 1px solid rgba(255, 255, 255, .14);
+            box-shadow: inset 0 1px rgba(255, 255, 255, .15), 0 20px 60px rgba(0, 0, 0, .35);
+            text-align: left;
+            z-index: 20;
+        }
+
+        .glass .site-name {
+            font-size: 62px;
+            font-weight: 700;
+            letter-spacing: -2px;
+            margin-bottom: 18px;
+            background: linear-gradient(90deg, #fff, #ffb34d);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            text-align: center;
-            flex-shrink: 0;
         }
 
-        .chat {
-            flex: 1;
-            overflow-y: auto;
-            text-align: left;
-            padding: 10px 6px;
-            margin: 12px 0 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            min-height: 0;
-        }
-
-        .msg {
-            padding: 14px 20px;
-            border-radius: 20px;
-            max-width: 85%;
-            font-size: 17px;
-            line-height: 1.5;
-            animation: fadeIn 0.25s ease;
-            word-wrap: break-word;
-        }
-
-        .msg.user {
-            background: rgba(255, 140, 0, 0.3);
-            align-self: flex-end;
-            margin-left: auto;
-        }
-
-        .msg.bot {
-            background: rgba(255, 255, 255, 0.08);
-            align-self: flex-start;
-        }
-
-        .msg .sources {
-            margin-top: 8px;
-            font-size: 14px;
-            opacity: 0.6;
-        }
-
-        .input-container {
-            display: flex;
-            gap: 14px;
-            padding-top: 10px;
-            flex-shrink: 0;
-            position: relative;
-            z-index: 10;
-            background: transparent;
-        }
-
-        .input-wrapper {
-            display: flex;
-            width: 100%;
-            position: relative;
-            align-items: center;
-        }
-
-        input {
-            flex: 1;
-            padding: 16px 24px;
-            font-size: 17px;
-            height: 62px;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 50px;
-            color: white;
-            outline: none;
-            width: 100%;
-            font-family: 'Inter', sans-serif;
-        }
-
-        input::placeholder {
-            color: rgba(255,255,255,0.35);
-        }
-
-        button {
-            padding: 18px 44px;
+        .glass .title {
+            width: 420px;
             font-size: 18px;
-            font-weight: 500;
-            background: rgba(255, 140, 0, 0.9);
-            border: none;
-            border-radius: 50px;
+            line-height: 31px;
             color: white;
-            cursor: pointer;
-            transition: all 0.3s;
-            white-space: nowrap;
-            font-family: 'Inter', sans-serif;
-            flex-shrink: 0;
-            height: 62px;
-            line-height: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        button:hover {
-            background: #ff8c00;
-            transform: translateY(-2px);
-        }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        .footer {
-            margin-top: 12px;
-            font-size: 16px;
-            opacity: 0.35;
             font-weight: 300;
-            letter-spacing: 0.5px;
-            flex-shrink: 0;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to { opacity: 1; transform: translateY(0); }
+        .start {
+            position: absolute;
+            right: 120px;
+            top: 56%;
+            width: 130px;
+            height: 130px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 22px;
+            font-weight: 400;
+            color: white;
+            background: rgba(255, 255, 255, .18);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            box-shadow: 0 0 45px rgba(255, 185, 120, .45), inset 0 1px rgba(255, 255, 255, .2);
+            transition: .35s ease;
+            z-index: 20;
         }
 
-        .chat::-webkit-scrollbar {
-            width: 4px;
-        }
-        .chat::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .chat::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.2);
-            border-radius: 4px;
+        .start:hover {
+            transform: scale(1.07);
+            background: rgba(255, 255, 255, .24);
+            box-shadow: 0 0 70px rgba(255, 190, 120, .65), inset 0 1px rgba(255, 255, 255, .3);
         }
 
-       
+        @media (max-width: 1024px) {
+            .glass { left: 35%; width: 520px; height: 290px; padding: 40px 40px; }
+            .glass .site-name { font-size: 48px; }
+            .glass .title { width: 100%; font-size: 16px; line-height: 28px; }
+            .start { right: 70px; width: 120px; height: 120px; font-size: 20px; }
+            .ai { left: 90px; bottom: 60px; }
+        }
+
         @media (max-width: 768px) {
             body {
-                padding: 16px;
-                overflow: hidden;
-                height: 100vh;
-                height: 100dvh;
                 background-image: url('https://i.pinimg.com/1200x/19/80/cd/1980cd2f05ca1aac3e02d569221649af.jpg');
                 background-size: cover;
                 background-position: center;
                 background-repeat: no-repeat;
             }
 
-            .card {
-                padding: 20px 16px 16px;
-                border-radius: 32px;
-                height: 78vh;
-                height: 78dvh;
-                max-height: none;
-                max-width: 92%;
-                aspect-ratio: 1 / 1;
-                background: rgba(35, 35, 35, 0.22);
-                backdrop-filter: blur(20px);
-                -webkit-backdrop-filter: blur(20px);
-                border: 1px solid rgba(255,255,255,0.08);
-                box-shadow: 0 15px 40px rgba(0,0,0,.35), 0 0 30px rgba(255,140,0,.05);
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                overflow: hidden;
-            }
-
-            .logo {
-                font-size: 34px;
-                margin-bottom: 12px;
+            .glass {
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 92%;
+                height: auto;
+                padding: 30px 24px;
                 text-align: center;
-                flex-shrink: 0;
             }
 
-            .chat {
-                padding: 6px 2px;
-                margin: 6px 0 10px;
-                gap: 6px;
-                flex: 1;
-                overflow-y: auto;
-                min-height: 0;
+            .glass .site-name { font-size: 36px; }
+            .glass .title { width: 100%; font-size: 16px; line-height: 28px; }
+
+            .start {
+                right: 50%;
+                top: auto;
+                bottom: 60px;
+                transform: translateX(50%);
+                width: 110px;
+                height: 110px;
+                font-size: 20px;
             }
 
-            .msg {
-                font-size: 14px;
-                padding: 10px 14px;
-                max-width: 92%;
-                border-radius: 16px;
-            }
-
-            .msg .sources {
-                font-size: 11px;
-            }
-
-            .input-container {
-                gap: 0;
-                padding-top: 6px;
-                flex-shrink: 0;
-                position: relative;
-                z-index: 10;
-                background: transparent;
-            }
-
-            .input-wrapper {
-                display: flex;
-                width: 100%;
-                position: relative;
-                align-items: center;
-            }
-
-            .input-wrapper input {
-                width: 100%;
-                height: 48px;
-                padding: 0 55px 0 18px;
-                font-size: 15px;
-                border-radius: 40px;
-                background: rgba(0, 0, 0, 0.4);
-                border: 1px solid rgba(255,255,255,0.1);
-                color: white;
-                outline: none;
-                font-family: 'Inter', sans-serif;
-            }
-
-            .input-wrapper input::placeholder {
-                color: rgba(255,255,255,0.35);
-            }
-
-            .input-wrapper button {
-                position: absolute;
-                right: 6px;
-                top: 50%;
-                transform: translateY(-50%);
-                width: 40px;
-                height: 40px;
-                padding: 0;
-                font-size: 18px;
-                border-radius: 50%;
-                min-width: auto;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                line-height: 1;
-                background: rgba(255, 140, 0, 0.9);
-                border: none;
-                color: white;
-                cursor: pointer;
-                font-family: 'Inter', sans-serif;
-                flex-shrink: 0;
-                transition: none;
-                z-index: 20;
-            }
-
-            .input-wrapper button:active {
-                transform: translateY(-50%) scale(0.95);
-            }
-
-            .footer {
-                font-size: 11px;
-                margin-top: 6px;
-                flex-shrink: 0;
-            }
+            .side-item { display: none; }
+            .brand { font-size: 18px; }
+            .menu span { width: 40px; height: 2px; }
         }
 
-        
-        @media (max-width: 480px) {   //телефон
-            body {
-                margin: 0;
-                width: 100%;
-                min-height: 100dvh;
-                background-image: url('https://i.pinimg.com/1200x/19/80/cd/1980cd2f05ca1aac3e02d569221649af.jpg');
-                background-size: cover;
-                background-position: center;
-                background-repeat: no-repeat;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                overflow: hidden;
-                font-family: 'Inter', sans-serif;
-                color: white;
-                padding: 8px;
-            }
-
-            .card {
-                padding: 16px 12px 12px;
-                border-radius: 24px;
-                height: 74vh;
-                height: 74dvh;
-                max-width: 96%;
-                aspect-ratio: 1 / 1;
-                background: rgba(35, 35, 35, 0.2);
-                backdrop-filter: blur(16px);
-                -webkit-backdrop-filter: blur(16px);
-                border: 1px solid rgba(255,255,255,0.06);
-                box-shadow: 0 10px 30px rgba(0,0,0,.3), 0 0 20px rgba(255,140,0,.03);
-            }
-
-            .logo {
-                font-size: 28px;
-                margin-bottom: 10px;
-            }
-
-            .chat {
-                padding: 4px 2px;
-                margin: 4px 0 8px;
-                gap: 4px;
-            }
-
-            .msg {
-                font-size: 13px;
-                padding: 8px 12px;
-                max-width: 94%;
-                border-radius: 14px;
-            }
-
-            .msg .sources {
-                font-size: 10px;
-                margin-top: 4px;
-            }
-
-            .input-container {
-                gap: 0;
-                padding-top: 4px;
-            }
-
-            .input-wrapper input {
-                height: 40px;
-                padding: 0 44px 0 14px;
-                font-size: 14px;
-                border-radius: 30px;
-            }
-
-            .input-wrapper button {
-                width: 32px;
-                height: 32px;
-                font-size: 14px;
-                right: 4px;
-                border-radius: 50%;
-            }
-
-            .footer {
-                font-size: 10px;
-                margin-top: 4px;
-            }
+        @media (max-width: 480px) {
+            .glass .site-name { font-size: 28px; }
+            .glass .title { font-size: 14px; line-height: 24px; }
+            .start { width: 90px; height: 90px; font-size: 18px; bottom: 40px; }
         }
     </style>
 </head>
 <body>
-    <div class="background"></div>
 
-    <div class="card">
-        <div class="logo">DocSearch</div>
+    <div class="overlay"></div>
 
-        <div class="chat" id="chat">
-            <div class="msg bot">
-                Добро пожаловать, сотрудник СерчИнформ!
-                <br><br>
-                Я помогу найти информацию в документации.
-                <br><br>
-                Просто задайте вопрос, и я найду ответ среди загруженных документов.
-            </div>
+    <header>
+        <div class="brand">SearchInform</div>
+        <div class="menu">
+            <span></span>
+            <span></span>
         </div>
+    </header>
 
-        <div class="input-container">
-            <div class="input-wrapper">
-                <input type="text" id="question" placeholder="Напиши свой вопрос...">
-                <button id="sendBtn">➜</button>
-            </div>
-        </div>
+    <div class="side-item lera"><span>Lera</span><div class="line"></div></div>
+    <div class="side-item rag"><span>RAG</span><div class="line"></div></div>
+    <div class="side-item ai"><span>AI</span><div class="line"></div></div>
 
-        <div class="footer">DOCSEARCH — твой локальный RAG</div>
+    <div class="glass">
+        <div class="site-name">DocSearch</div>
+        <div class="title">Ваш интеллектуальный поиск <br>по корпоративной документации</div>
     </div>
 
+    <button class="start" id="startBtn">Начать</button>
+
     <script>
-        const chat = document.getElementById('chat');
-        const input = document.getElementById('question');
-        const btn = document.getElementById('sendBtn');
+        
+        const startBtn = document.getElementById("startBtn");
 
-        function addMessage(text, isUser, sources) {
-            const msg = document.createElement('div');
-            msg.className = `msg ${isUser ? 'user' : 'bot'}`;
-            msg.textContent = text;
-
-            if (sources && sources.length) {
-                const src = document.createElement('div');
-                src.className = 'sources';
-                const names = sources.map(s => s.doc_id).join(', ');
-                src.textContent = `Источники: ${names}`;
-                msg.appendChild(src);
-            }
-
-            chat.appendChild(msg);
-            chat.scrollTop = chat.scrollHeight;
-        }
-
-        async function sendQuestion() {
-            const q = input.value.trim();
-            if (!q) return;
-
-            addMessage(q, true);
-            input.value = '';
-
-            const wait = document.createElement('div');
-            wait.className = 'msg bot';
-            wait.textContent = 'Ищу...';
-            wait.style.opacity = '0.6';
-            chat.appendChild(wait);
-            chat.scrollTop = chat.scrollHeight;
-
-            try {
-                const res = await fetch('/ask', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: q })
-                });
-
-                const data = await res.json();
-                chat.removeChild(wait);
-
-                if (data.answer) {
-                    addMessage(data.answer, false, data.sources || []);
-                } else {
-                    addMessage('В документации такой информации не найдено.', false);
-                }
-            } catch (e) {
-                chat.removeChild(wait);
-                addMessage('Ошибка соединения с сервером.', false);
-            }
-        }
-
-        btn.addEventListener('click', sendQuestion);
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') sendQuestion();
+        startBtn.addEventListener("click", function() {
+            window.location.href = "/chat.html";
         });
     </script>
+
 </body>
 </html>
