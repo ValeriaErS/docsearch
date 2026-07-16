@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Вход — DocSearch</title>
+    <title>Регистрация — DocSearch</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -60,7 +60,6 @@
             border-radius: 30px;
         }
 
-       
         .back-link {
             position: absolute;
             top: 75px;
@@ -154,7 +153,7 @@
             background: rgba(0, 0, 0, 0.3);
         }
 
-        .login-btn {
+        .register-btn {
             width: 100%;
             padding: 16px;
             background: rgba(255, 255, 255, 0.15);
@@ -171,11 +170,11 @@
             margin-top: 6px;
         }
 
-        .login-btn:hover {
+        .register-btn:hover {
             background: rgba(255, 255, 255, 0.25);
         }
 
-        .register-text {
+        .login-text {
             color: rgba(255, 255, 255, 0.4);
             font-size: 14px;
             margin-top: 18px;
@@ -183,14 +182,14 @@
             padding-left: 4px;
         }
 
-        .register-text a {
+        .login-text a {
             color: white;
             text-decoration: none;
             font-weight: 500;
             opacity: 0.7;
         }
 
-        .register-text a:hover {
+        .login-text a:hover {
             opacity: 1;
         }
 
@@ -202,6 +201,17 @@
         }
 
         .error-msg.show {
+            display: block;
+        }
+
+        .success-msg {
+            color: #4CAF50;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .success-msg.show {
             display: block;
         }
 
@@ -220,7 +230,7 @@
                 font-size: 15px;
             }
 
-            .login-btn {
+            .register-btn {
                 padding: 14px;
                 font-size: 16px;
             }
@@ -268,75 +278,107 @@
         </div>
     </header>
 
-    <a href="/" class="back-link">← На главную</a>
+    <a href="/login.html" class="back-link">← Назад</a>
 
     <div class="side-item lera"><span>Lera</span><div class="line"></div></div>
     <div class="side-item rag"><span>RAG</span><div class="line"></div></div>
     <div class="side-item ai"><span>AI</span><div class="line"></div></div>
 
     <div class="glass">
-        <div class="title">Вход</div>
+        <div class="title">Регистрация</div>
 
-        <input type="text" id="loginInput" placeholder="Введите имя пользователя">
-        <input type="password" id="passwordInput" placeholder="Введите пароль">
+        <input type="text" id="regUsername" placeholder="Придумайте имя пользователя">
+        <input type="password" id="regPassword" placeholder="Придумайте пароль">
+        <input type="password" id="regPasswordConfirm" placeholder="Подтвердите пароль">
 
-        <button class="login-btn" id="loginBtn">Войти</button>
+        <button class="register-btn" id="registerBtn">Зарегистрироваться</button>
 
-        <div class="error-msg" id="loginError">Неверный логин или пароль</div>
+        <div class="error-msg" id="regError"> Ошибка</div>
+        <div class="success-msg" id="regSuccess">Аккаунт создан! Перенаправляем...</div>
 
-        <div class="register-text">
-    Если нет аккаунта, <a href="/register.html">зарегистрируйтесь</a>. Ваш аккаунт — Ваши персональные документы.
-</div>
+        <div class="login-text">
+            Уже есть аккаунт? <a href="/login.html">Войти</a>
+        </div>
     </div>
 
     <script>
-        const loginInput = document.getElementById('loginInput');
-        const passwordInput = document.getElementById('passwordInput');
-        const loginBtn = document.getElementById('loginBtn');
-        const loginError = document.getElementById('loginError');
-        const registerLink = document.getElementById('registerLink');
+        const regUsername = document.getElementById('regUsername');
+        const regPassword = document.getElementById('regPassword');
+        const regPasswordConfirm = document.getElementById('regPasswordConfirm');
+        const registerBtn = document.getElementById('registerBtn');
+        const regError = document.getElementById('regError');
+        const regSuccess = document.getElementById('regSuccess');
 
-        loginBtn.addEventListener('click', async function() {
-            const username = loginInput.value.trim();
-            const password = passwordInput.value.trim();
+        registerBtn.addEventListener('click', async function() {
+            const username = regUsername.value.trim();
+            const password = regPassword.value.trim();
+            const passwordConfirm = regPasswordConfirm.value.trim();
 
-            if (!username || !password) {
-                loginError.textContent = 'Заполните все поля';
-                loginError.classList.add('show');
+            // Проверка полей
+            if (!username || !password || !passwordConfirm) {
+                regError.textContent = 'Заполните все поля';
+                regError.classList.add('show');
+                regSuccess.classList.remove('show');
                 return;
             }
 
+            if (password.length < 3) {
+                regError.textContent = 'Пароль должен быть не менее 3 символов';
+                regError.classList.add('show');
+                regSuccess.classList.remove('show');
+                return;
+            }
+
+            if (password !== passwordConfirm) {
+                regError.textContent = 'Пароли не совпадают';
+                regError.classList.add('show');
+                regSuccess.classList.remove('show');
+                return;
+            }
+
+            regError.classList.remove('show');
+
             try {
-                const res = await fetch('/login', {
+                const res = await fetch('/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
 
-                const data = await res.json();
+                if (res.status === 409) {
+                    regError.textContent = 'Пользователь с таким именем уже существует';
+                    regError.classList.add('show');
+                    return;
+                }
 
-                if (data.success) {
-                    window.location.href = '/chat.html?user=' + encodeURIComponent(username);
+                if (res.ok) {
+                    regSuccess.textContent = 'Аккаунт создан! Перенаправляем...';
+                    regSuccess.classList.add('show');
+                    regError.classList.remove('show');
+
+                     
+                    setTimeout(() => {   // Перенаправляю на страницу входа
+                        window.location.href = '/login.html';
+                    }, 2000);
                 } else {
-                    loginError.textContent = 'Неверный логин или пароль';
-                    loginError.classList.add('show');
+                    regError.textContent = 'Ошибка при создании аккаунта';
+                    regError.classList.add('show');
                 }
             } catch (e) {
-                loginError.textContent = 'Ошибка соединения с сервером';
-                loginError.classList.add('show');
+                regError.textContent = 'Ошибка соединения с сервером';
+                regError.classList.add('show');
             }
         });
 
-        loginInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') loginBtn.click();
+        
+        regUsername.addEventListener('keydown', (e) => {  // Регистрация по Enter
+            if (e.key === 'Enter') registerBtn.click();
         });
-        passwordInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') loginBtn.click();
+        regPassword.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') registerBtn.click();
         });
-
-        registerLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            alert('Регистрация скоро будет доступна!');
+        regPasswordConfirm.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') registerBtn.click();
         });
     </script>
 

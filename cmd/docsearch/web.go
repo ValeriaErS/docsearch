@@ -19,27 +19,34 @@ func runWeb(cfg *config.Config, port string) {
     var err error
     database, err = db.NewDB()
     if err != nil {
-        fmt.Println("❌ Ошибка базы:", err)
+        fmt.Println("Ошибка базы:", err)
         return
     }
     defer database.Close()
-var currentUser = ""
-      
-    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {     //страницы
+
+    
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {  // странички
         http.ServeFile(w, r, "web/index.html")
     })
 
     http.HandleFunc("/chat.html", func(w http.ResponseWriter, r *http.Request) {
         http.ServeFile(w, r, "web/chat.html")
     })
+
     http.HandleFunc("/test.html", func(w http.ResponseWriter, r *http.Request) {
-    http.ServeFile(w, r, "web/test.html")
-})
-http.HandleFunc("/login.html", func(w http.ResponseWriter, r *http.Request) {
-    http.ServeFile(w, r, "web/login.html")
-})
+        http.ServeFile(w, r, "web/test.html")
+    })
+
+    http.HandleFunc("/login.html", func(w http.ResponseWriter, r *http.Request) {
+        http.ServeFile(w, r, "web/login.html")
+    })
+
+    http.HandleFunc("/register.html", func(w http.ResponseWriter, r *http.Request) {
+        http.ServeFile(w, r, "web/register.html")
+    })
+
     
-    http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {   //логин
+    http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {   // логин
         if r.Method != "POST" {
             http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)
             return
@@ -57,8 +64,7 @@ http.HandleFunc("/login.html", func(w http.ResponseWriter, r *http.Request) {
         }
 
         ok := database.CheckUser(req.Username, req.Password)
-        currentUser = req.Username
-        
+
         w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(map[string]interface{}{
             "success": ok,
@@ -67,7 +73,39 @@ http.HandleFunc("/login.html", func(w http.ResponseWriter, r *http.Request) {
     })
 
     
-    http.HandleFunc("/ask", func(w http.ResponseWriter, r *http.Request) {   // вопрос
+    http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {  // регистрация
+        if r.Method != "POST" {
+            http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)
+            return
+        }
+
+        var req struct {
+            Username string `json:"username"`
+            Password string `json:"password"`
+        }
+
+        err := json.NewDecoder(r.Body).Decode(&req)
+        if err != nil {
+            http.Error(w, "Ошибка чтения", http.StatusBadRequest)
+            return
+        }
+
+        
+        err = database.AddUser(req.Username, req.Password)  // Добавляю пользователя в базу
+        if err != nil {
+            http.Error(w, "Пользователь уже существует", http.StatusConflict)
+            return
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "success": true,
+            "user": req.Username,
+        })
+    })
+
+    
+    http.HandleFunc("/ask", func(w http.ResponseWriter, r *http.Request) {  // вопрос
         if r.Method != "POST" {
             http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)
             return
@@ -99,32 +137,31 @@ http.HandleFunc("/login.html", func(w http.ResponseWriter, r *http.Request) {
         }
 
         chatHistory[userID] = append(chatHistory[userID], map[string]string{
-            "role":"user",
+            "role": "user",
             "content": req.Query,
         })
 
         answer, sources := findAnswer(cfg, req.Query, userID)
 
         chatHistory[userID] = append(chatHistory[userID], map[string]string{
-            "role":"assistant",
+            "role": "assistant",
             "content": answer,
         })
 
         w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(map[string]interface{}{
-            "answer": answer,
+            "answer":  answer,
             "sources": sources,
         })
     })
 
-    fmt.Println("🌐 Сайт запущен: http://localhost" + port)
+    fmt.Println("Сайт запущен: http://localhost" + port)
     http.ListenAndServe("0.0.0.0"+port, nil)
 }
 
 func findAnswer(cfg *config.Config, question string, userID string) (string, []map[string]interface{}) {
     client := vector.NewQdrantClient()
     client.VectorSize = cfg.Embeddings.VectorSize
-    
 
     vec, err := embed.GetEmbedding(question)
     if err != nil {
@@ -136,7 +173,7 @@ func findAnswer(cfg *config.Config, question string, userID string) (string, []m
         vec32 = append(vec32, float32(v))
     }
 
-    results, err := client.Search("documents", vec32, 10, userID)
+    results, err := client.Search("documents", vec32, 10, "")
     if err != nil || len(results) == 0 {
         return "Ничего не нашла", nil
     }
