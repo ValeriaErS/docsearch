@@ -32,50 +32,33 @@ DocSearch теперь имеет полноценный веб-интерфей
 - Скачай **LM Studio**: https://lmstudio.ai/
 - Зарегистрируйся на **OpenRouter**: https://openrouter.ai/ и получи API-ключ
 
----
-
 ## Шаг 2. Клонировать проект
 
-```bash
 git clone https://github.com/ValeriaErs/docsearch.git
 cd docsearch
-
----
 
 ## Шаг 3. Настроить окружение
 Создай файл .env в корне проекта:
 LLM_API_KEY=sk-or-v1-твой_ключ
 DATABASE_URL=postgresql://postgres:твой_пароль@db.твой_проект.supabase.co:5432/postgres
 
----
-
 ## Шаг 4. Запустить Qdrant
 docker run -p 6333:6333 qdrant/qdrant
-
----
 
 ## Шаг 5. Запустить LM Studio
 1.Открой LM Studio
 2.Загрузи модель: text-embedding-nomic-embed-text-v1.5
 3.Нажми Start Server
 
----
-
 ## Шаг 6. Собрать и запустить проект
 go mod download
 go build -o docsearch.exe ./cmd/docsearch
 .\docsearch.exe web --port :8080
 
----
-
 ## Шаг 7. Зарегистрировать пользователя
-
----
 
 ## Шаг 8. Проиндексировать документы
 .\docsearch.exe index --user Имя_пользователя
-
----
 
 ## Шаг 9. Войти и задать вопрос
 
