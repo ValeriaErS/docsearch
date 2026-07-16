@@ -1,92 +1,130 @@
 package main
 
 import (
-	"fmt"
     "encoding/json"
+    "fmt"
     "net/http"
+
+    "docsearch/internal/config"
+    "docsearch/internal/db"
     "docsearch/internal/embed"
     "docsearch/internal/llm"
     "docsearch/internal/vector"
-    "docsearch/internal/config"
-    "net"
 )
-var chatHistory=make(map[string][]map[string]string)
 
-func runWeb(cfg *config.Config, port string, userID string) {     //запуск сервера
-    if userID==""{
-        userID="default"
+var chatHistory = make(map[string][]map[string]string)
+var database *db.DB
+
+func runWeb(cfg *config.Config, port string) {
+    var err error
+    database, err = db.NewDB()
+    if err != nil {
+        fmt.Println("❌ Ошибка базы:", err)
+        return
     }
-    fmt.Println("Пользователь:",userID)
-
-if chatHistory[userID]==nil{
-    chatHistory[userID]=[]map[string]string{}
-}
-
-    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+    defer database.Close()
+var currentUser = ""
+      
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {     //страницы
         http.ServeFile(w, r, "web/index.html")
     })
 
-    http.HandleFunc("/ask", func(w http.ResponseWriter, r *http.Request) {  // обрабатываю вопросы которые приходят из чата
+    http.HandleFunc("/chat.html", func(w http.ResponseWriter, r *http.Request) {
+        http.ServeFile(w, r, "web/chat.html")
+    })
+    http.HandleFunc("/test.html", func(w http.ResponseWriter, r *http.Request) {
+    http.ServeFile(w, r, "web/test.html")
+})
+http.HandleFunc("/login.html", func(w http.ResponseWriter, r *http.Request) {
+    http.ServeFile(w, r, "web/login.html")
+})
+    
+    http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {   //логин
         if r.Method != "POST" {
             http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)
             return
         }
 
-        var req struct {               // читаю вопрос из тела
-            Query string `json:"query"`
+        var req struct {
+            Username string `json:"username"`
+            Password string `json:"password"`
         }
-        json.NewDecoder(r.Body).Decode(&req)
+
+        err := json.NewDecoder(r.Body).Decode(&req)
+        if err != nil {
+            http.Error(w, "Ошибка чтения", http.StatusBadRequest)
+            return
+        }
+
+        ok := database.CheckUser(req.Username, req.Password)
+        currentUser = req.Username
+        
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "success": ok,
+            "user": req.Username,
+        })
+    })
+
+    
+    http.HandleFunc("/ask", func(w http.ResponseWriter, r *http.Request) {   // вопрос
+        if r.Method != "POST" {
+            http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)
+            return
+        }
+
+        var req struct {
+            Query string `json:"query"`
+            User  string `json:"user"`
+        }
+
+        err := json.NewDecoder(r.Body).Decode(&req)
+        if err != nil {
+            http.Error(w, "Ошибка чтения", http.StatusBadRequest)
+            return
+        }
 
         if req.Query == "" {
             http.Error(w, "Пустой вопрос", http.StatusBadRequest)
             return
         }
-        chatHistory[userID]=append(chatHistory[userID],map [string]string{
-            "role": "user",
+
+        userID := req.User
+        if userID == "" {
+            userID = "default"
+        }
+
+        if chatHistory[userID] == nil {
+            chatHistory[userID] = []map[string]string{}
+        }
+
+        chatHistory[userID] = append(chatHistory[userID], map[string]string{
+            "role":"user",
             "content": req.Query,
         })
 
-       answer, sources := findAnswer(req.Query, userID)
+        answer, sources := findAnswer(cfg, req.Query, userID)
 
-       chatHistory[userID]=append(chatHistory[userID],map[string]string{
-        "role": "assistant",
-        "content": answer,
-       })
+        chatHistory[userID] = append(chatHistory[userID], map[string]string{
+            "role":"assistant",
+            "content": answer,
+        })
 
-        w.Header().Set("Content-Type", "application/json")     // отправляю ответ
+        w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(map[string]interface{}{
-            "answer":  answer,
+            "answer": answer,
             "sources": sources,
         })
     })
-    fullAddress:="0.0.0.0" + port
 
-    fmt.Println("Сайт запущен: http://localhost" + port)
-     fmt.Println("В сети: http://" + getLocalIP() + port)
-    http.ListenAndServe(fullAddress, nil)
-}
-func getLocalIP() string{
-    addrs,err:=net.InterfaceAddrs()
-    if err!=nil{
-        return "localhost"
-    }
-    for _, addr:=range addrs{
-        if ipnet,ok:=addr.(*net.IPNet);ok && !ipnet.IP.IsLoopback(){
-           if ipnet.IP.To4() != nil {
-                return ipnet.IP.String() 
-           }
-        }
-    }
-    return "localhost"
+    fmt.Println("🌐 Сайт запущен: http://localhost" + port)
+    http.ListenAndServe("0.0.0.0"+port, nil)
 }
 
-
-
-func findAnswer(question string, userID string) (string, []map[string]interface{}) {   //ищет ответ на вопрос в документации
-    fmt.Println("Поиск для пользователя",userID)
+func findAnswer(cfg *config.Config, question string, userID string) (string, []map[string]interface{}) {
     client := vector.NewQdrantClient()
-    client.VectorSize = 999
-   
+    client.VectorSize = cfg.Embeddings.VectorSize
+    
 
     vec, err := embed.GetEmbedding(question)
     if err != nil {
@@ -98,7 +136,7 @@ func findAnswer(question string, userID string) (string, []map[string]interface{
         vec32 = append(vec32, float32(v))
     }
 
-    results, err := client.Search("documents", vec32, 10, userID)   // ищу похожие чанки
+    results, err := client.Search("documents", vec32, 10, userID)
     if err != nil || len(results) == 0 {
         return "Ничего не нашла", nil
     }
@@ -116,21 +154,20 @@ func findAnswer(question string, userID string) (string, []map[string]interface{
         })
     }
 
-seen := map[string]bool{}
-uniqueSources := []map[string]interface{}{}
-for _, s := range sources {
-    docID := s["doc_id"].(string)
-    if !seen[docID] {
-        seen[docID] = true
-        uniqueSources = append(uniqueSources, s)
+    seen := map[string]bool{}
+    uniqueSources := []map[string]interface{}{}
+    for _, s := range sources {
+        docID := s["doc_id"].(string)
+        if !seen[docID] {
+            seen[docID] = true
+            uniqueSources = append(uniqueSources, s)
+        }
     }
-}
-sources = uniqueSources
+    sources = uniqueSources
 
-
-    answer, err := llm.GetAnswerWithHistory(question, context, chatHistory[userID])    // отправляю в llm
+    answer, err := llm.GetAnswerWithHistory(question, context, chatHistory[userID])
     if err != nil {
-         fmt.Println("Ошибка LLM:", err) 
+        fmt.Println("Ошибка LLM:", err)
         return "Ошибка: нейросеть не отвечает", sources
     }
 

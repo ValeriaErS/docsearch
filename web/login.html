@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Вход — DocSearch</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background: url('https://i.pinimg.com/736x/1f/14/f9/1f14f994d524cdf3feff1c682f23b6ef.jpg');
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.05));
+        }
+
+        header {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            right: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 20;
+        }
+
+        .brand {
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .menu {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        .menu span {
+            width: 54px;
+            height: 3px;
+            background: white;
+            border-radius: 30px;
+        }
+
+        /* ===== ССЫЛКА НА ГЛАВНУЮ ===== */
+        .back-link {
+            position: absolute;
+            top: 75px;
+            left: 25px;
+            z-index: 30;
+            color: rgba(255,255,255,0.5);
+            font-size: 14px;
+            text-decoration: none;
+            font-family: 'Inter', sans-serif;
+            transition: 0.3s;
+        }
+
+        .back-link:hover {
+            color: white;
+        }
+
+        .side-item {
+            position: absolute;
+            z-index: 25;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            color: white;
+            opacity: .65;
+        }
+
+        .side-item span {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            font-size: 18px;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        .side-item .line {
+            width: 1px;
+            height: 70px;
+            background: rgba(255, 255, 255, .35);
+        }
+
+        .lera { left: 38px; top: 165px; }
+        .rag { left: 38px; top: 330px; }
+        .ai { left: 245px; bottom: 75px; }
+
+        .glass {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 480px;
+            padding: 40px 45px 35px;
+            border-radius: 34px;
+            background: rgba(255, 255, 255, .08);
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+            border: 1px solid rgba(255, 255, 255, .14);
+            box-shadow: inset 0 1px rgba(255, 255, 255, .15), 0 20px 60px rgba(0, 0, 0, .35);
+            text-align: center;
+            z-index: 20;
+        }
+
+        .glass .title {
+            color: white;
+            font-size: 42px;
+            font-weight: 400;
+            margin-bottom: 20px;
+            letter-spacing: 1px;
+        }
+
+        .glass input {
+            width: 100%;
+            padding: 16px 20px;
+            margin-bottom: 14px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50px;
+            color: white;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        .glass input::placeholder {
+            color: rgba(255, 255, 255, 0.35);
+        }
+
+        .glass input:focus {
+            border-color: rgba(255, 140, 0, 0.4);
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 50px;
+            color: white;
+            font-size: 18px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.3s;
+            font-family: 'Inter', sans-serif;
+            margin-top: 6px;
+        }
+
+        .login-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .register-text {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 14px;
+            margin-top: 18px;
+            text-align: left;
+            padding-left: 4px;
+        }
+
+        .register-text a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            opacity: 0.7;
+        }
+
+        .register-text a:hover {
+            opacity: 1;
+        }
+
+        .error-msg {
+            color: #ff6b6b;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .error-msg.show {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .glass {
+                width: 90%;
+                padding: 30px 24px 25px;
+            }
+
+            .glass .title {
+                font-size: 32px;
+            }
+
+            .glass input {
+                padding: 14px 18px;
+                font-size: 15px;
+            }
+
+            .login-btn {
+                padding: 14px;
+                font-size: 16px;
+            }
+
+            .side-item {
+                display: none;
+            }
+
+            .brand {
+                font-size: 18px;
+            }
+
+            .menu span {
+                width: 40px;
+                height: 2px;
+            }
+
+            .back-link {
+                top: 70px;
+                left: 20px;
+                font-size: 13px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .glass .title {
+                font-size: 26px;
+            }
+
+            .glass {
+                padding: 24px 18px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="overlay"></div>
+
+    <header>
+        <div class="brand">SearchInform</div>
+        <div class="menu">
+            <span></span>
+            <span></span>
+        </div>
+    </header>
+
+    <a href="/" class="back-link">← На главную</a>
+
+    <div class="side-item lera"><span>Lera</span><div class="line"></div></div>
+    <div class="side-item rag"><span>RAG</span><div class="line"></div></div>
+    <div class="side-item ai"><span>AI</span><div class="line"></div></div>
+
+    <div class="glass">
+        <div class="title">Вход</div>
+
+        <input type="text" id="loginInput" placeholder="Введите имя пользователя">
+        <input type="password" id="passwordInput" placeholder="Введите пароль">
+
+        <button class="login-btn" id="loginBtn">Войти</button>
+
+        <div class="error-msg" id="loginError">Неверный логин или пароль</div>
+
+        <div class="register-text">
+            Если нет аккаунта, <a href="#" id="registerLink">зарегистрируйтесь</a>. Ваш аккаунт — Ваши персональные документы.
+        </div>
+    </div>
+
+    <script>
+        const loginInput = document.getElementById('loginInput');
+        const passwordInput = document.getElementById('passwordInput');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginError = document.getElementById('loginError');
+        const registerLink = document.getElementById('registerLink');
+
+        loginBtn.addEventListener('click', async function() {
+            const username = loginInput.value.trim();
+            const password = passwordInput.value.trim();
+
+            if (!username || !password) {
+                loginError.textContent = 'Заполните все поля';
+                loginError.classList.add('show');
+                return;
+            }
+
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    window.location.href = '/chat.html?user=' + encodeURIComponent(username);
+                } else {
+                    loginError.textContent = 'Неверный логин или пароль';
+                    loginError.classList.add('show');
+                }
+            } catch (e) {
+                loginError.textContent = 'Ошибка соединения с сервером';
+                loginError.classList.add('show');
+            }
+        });
+
+        loginInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') loginBtn.click();
+        });
+        passwordInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') loginBtn.click();
+        });
+
+        registerLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            alert('Регистрация скоро будет доступна!');
+        });
+    </script>
+
+</body>
+</html>
