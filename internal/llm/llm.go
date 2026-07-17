@@ -19,7 +19,9 @@ func GetAnswerWithHistory(question string,chunks []string, history []map[string]
     apiKey := os.Getenv("LLM_API_KEY")
     if apiKey == "" {
         return "", fmt.Errorf("нет ключа")
-    }
+    } 
+     
+
 
     url := "https://openrouter.ai/api/v1/chat/completions"
 
@@ -125,7 +127,7 @@ for i:=1;i<=10;i++{
     answer = re.ReplaceAllString(answer, "\n\n")
     return answer,nil
 }
-// GetAnswer - для совместимости со старым кодом
+
 func GetAnswer(question string, chunks []string) (string, error) {
     return GetAnswerWithHistory(question, chunks, []map[string]string{})
 }

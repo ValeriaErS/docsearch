@@ -53,7 +53,7 @@ func main() {
     }
 
     if serveMode {  // если запускаю сервер
-        runWeb(cfg, port, userID)
+        runWeb(cfg, port)
         return
     }
 

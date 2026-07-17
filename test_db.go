@@ -16,5 +16,12 @@ func main() {
     }
     defer database.Close()
 
-    fmt.Println("Всё работает! База данных подключена.")
+    fmt.Println("Всё работает.База данных подключена.")
+
+	ok:=database.CheckUser("Валерия","123")
+	if ok {
+        fmt.Println("Вход выполнен")
+    } else {
+        fmt.Println("Неверный логин или пароль")
+    }
 }

@@ -6,6 +6,7 @@ import (
     "encoding/hex"
     "encoding/json"
     "os"
+    "path/filepath"
     "github.com/google/uuid"
     "docsearch/internal/chunk"
     "docsearch/internal/config"
@@ -35,10 +36,21 @@ func (i *Indexer) Index() error {
     if err != nil {
         return fmt.Errorf("ошибка создания коллекции: %w", err)
     }
-
-    docs, err := corpus.LoadDocuments(i.Config.Corpus.Path)  // загружаю документы из папки
+    userDocsPath:=filepath.Join(i.Config.Corpus.Path,i.UserID)
+    if _,err:=os.Stat(userDocsPath);
+    os.IsNotExist(err){
+        os.MkdirAll(userDocsPath,0755)
+        fmt.Printf("Папка для пользователя %s создана: %s\n", i.UserID, userDocsPath)
+        fmt.Println("Положите документы в папку:", userDocsPath)
+        return nil
+    }
+    docs, err := corpus.LoadDocuments(userDocsPath)  // загружаю документы из папки
     if err != nil {
         return err
+    }
+    if len(docs)==0{
+        fmt.Printf("В папке %s нет документов\n", userDocsPath)
+        return nil
     }
 
     old := map[string]string{}    // читаю старые хеши из файла
