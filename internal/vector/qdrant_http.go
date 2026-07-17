@@ -6,6 +6,7 @@ import (
     "encoding/json"
     "io"
     "net/http"
+    "os"
 )
 
 type QdrantClient struct {
@@ -15,7 +16,21 @@ type QdrantClient struct {
 }
 
 func NewQdrantClient() *QdrantClient {   // создаю нового клиента
-    return &QdrantClient{Host: "localhost", Port: 6333}
+   /* return &QdrantClient{Host: "localhost", Port: 6333}*/
+host := os.Getenv("QDRANT_HOST")
+    if host == "" {
+        host = "localhost"
+    }
+    
+    port := 6333
+    if host != "localhost" {
+        port = 443 
+    }
+    
+    return &QdrantClient{
+        Host: host,
+        Port: port,
+    }
 }
 
 func (q *QdrantClient) url(path string) string { //адрес
