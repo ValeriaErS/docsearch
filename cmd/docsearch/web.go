@@ -89,14 +89,24 @@ func runWeb(cfg *config.Config, port string) {
             http.Error(w, "Ошибка чтения", http.StatusBadRequest)
             return
         }
+        if len(req.Password) < 6 {
+        http.Error(w, "Пароль должен быть не менее 6 символов", http.StatusBadRequest)
+        return
+    }
 
-        
+    weakPasswords := []string{"123456", "password", "qwerty", "111111", "123123", "admin", "letmein", "555555", "000000", "12345"}
+    for _, wp := range weakPasswords {
+        if req.Password == wp {
+            http.Error(w, "Слишком простой пароль", http.StatusBadRequest)
+            return
+        }
+    }
         err = database.AddUser(req.Username, req.Password)  // Добавляю пользователя в базу
         if err != nil {
             http.Error(w, "Пользователь уже существует", http.StatusConflict)
             return
         }
-        fmt.Println("👤 Регистрируем:", req.Username)
+        fmt.Println("Регистрируем:", req.Username)
         userDir:="docs/"+req.Username
         os.MkdirAll(userDir,0755)
         fmt.Println("папка создана:",userDir)
@@ -109,7 +119,6 @@ func runWeb(cfg *config.Config, port string) {
         })
     })
 
-    
     http.HandleFunc("/ask", func(w http.ResponseWriter, r *http.Request) {  // вопрос
         if r.Method != "POST" {
             http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)

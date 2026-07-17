@@ -314,21 +314,13 @@
             const password = regPassword.value.trim();
             const passwordConfirm = regPasswordConfirm.value.trim();
 
-            // Проверка полей
-            if (!username || !password || !passwordConfirm) {
-                regError.textContent = 'Заполните все поля';
-                regError.classList.add('show');
-                regSuccess.classList.remove('show');
-                return;
-            }
-
-            if (password.length < 3) {
-                regError.textContent = 'Пароль должен быть не менее 3 символов';
-                regError.classList.add('show');
-                regSuccess.classList.remove('show');
-                return;
-            }
-
+            
+        if (!username || !password || !passwordConfirm) {  // Проверка полей
+            regError.textContent = 'Заполните все поля';
+            regError.classList.add('show');
+            regSuccess.classList.remove('show');
+            return;
+        }
             if (password !== passwordConfirm) {
                 regError.textContent = 'Пароли не совпадают';
                 regError.classList.add('show');
@@ -360,15 +352,20 @@
                     setTimeout(() => {   // Перенаправляю на страницу входа
                         window.location.href = '/login.html';
                     }, 2000);
-                } else {
-                    regError.textContent = 'Ошибка при создании аккаунта';
-                    regError.classList.add('show');
-                }
-            } catch (e) {
-                regError.textContent = 'Ошибка соединения с сервером';
+                } else if (res.status === 400) {
+               
+                const data = await res.text();
+                regError.textContent = data;
+                regError.classList.add('show');
+            } else {
+                regError.textContent = 'Ошибка при создании аккаунта';
                 regError.classList.add('show');
             }
-        });
+        } catch (e) {
+            regError.textContent = 'Ошибка соединения с сервером';
+            regError.classList.add('show');
+        }
+    });
 
         
         regUsername.addEventListener('keydown', (e) => {  // Регистрация по Enter
