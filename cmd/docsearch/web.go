@@ -4,7 +4,7 @@ import (
     "encoding/json"
     "fmt"
     "net/http"
-
+    "os"
     "docsearch/internal/config"
     "docsearch/internal/db"
     "docsearch/internal/embed"
@@ -96,6 +96,11 @@ func runWeb(cfg *config.Config, port string) {
             http.Error(w, "Пользователь уже существует", http.StatusConflict)
             return
         }
+        fmt.Println("👤 Регистрируем:", req.Username)
+        userDir:="docs/"+req.Username
+        os.MkdirAll(userDir,0755)
+        fmt.Println("папка создана:",userDir)
+
 
         w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(map[string]interface{}{
@@ -173,7 +178,7 @@ func findAnswer(cfg *config.Config, question string, userID string) (string, []m
         vec32 = append(vec32, float32(v))
     }
 
-    results, err := client.Search("documents", vec32, 10, "")
+    results, err := client.Search("documents", vec32, 10, userID)
     if err != nil || len(results) == 0 {
         return "Ничего не нашла", nil
     }
