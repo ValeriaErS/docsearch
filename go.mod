@@ -12,3 +12,5 @@ require (
 )
 
 require github.com/dlclark/regexp2 v1.10.0 // indirect
+
+replace github.com/ledongthuc/pdf => github.com/ledongthuc/pdf v0.0.0-20231018095937-f842532e4442
