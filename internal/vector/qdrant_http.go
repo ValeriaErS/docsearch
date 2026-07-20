@@ -34,7 +34,11 @@ host := os.Getenv("QDRANT_HOST")
 }
 
 func (q *QdrantClient) url(path string) string { //адрес
-    return fmt.Sprintf("http://%s:%d%s", q.Host, q.Port, path)
+    scheme := "http"
+    if q.Host != "localhost" {
+        scheme = "https"
+    }
+    return fmt.Sprintf("%s://%s:%d%s", scheme, q.Host, q.Port, path)
 }
 
 func (q *QdrantClient) Ping() error {
@@ -48,6 +52,7 @@ func (q *QdrantClient) Ping() error {
 
 func (q *QdrantClient) CreateCollection(name string) error {  // создаю коллекцию
     r, _ := http.Get(q.url("/collections/" + name))
+    
     defer r.Body.Close()
     if r.StatusCode == 200 {
         return nil
