@@ -8,6 +8,7 @@ require (
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/lib/pq v1.10.9
 	github.com/pkoukk/tiktoken-go v0.1.8
+	golang.org/x/crypto v0.21.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 

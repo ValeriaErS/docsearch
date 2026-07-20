@@ -6,6 +6,7 @@ import (
     "os"
     _ "github.com/lib/pq"
     "github.com/joho/godotenv"
+    "golang.org/x/crypto/bcrypt"
 )
 
 type DB struct {
@@ -39,34 +40,32 @@ func (d *DB) Close() {
 }
 
 func (d *DB) CheckUser(username, password string) bool {
-    var dbPassword string
+    var hashedPassword string
 
-    fmt.Println("Ищу пользователя:", username)
-
-    
-    err := d.Conn.QueryRow("SELECT password FROM users WHERE username = $1", username).Scan(&dbPassword)  // Ищем пароль в базе
-
-    if err != nil {
-        fmt.Println("Ошибка запроса:", err)
+    err:=d.Conn.QueryRow("SELECT password FROM users WHERE username = $1", username).Scan(&hashedPassword)
+    if err!=nil{
+        fmt.Println("Пользователь не найден",err)
         return false
     }
-
-    fmt.Println("Пароль в базе:", dbPassword)
-    fmt.Println("Пароль введённый:", password)
-
-    if dbPassword != password {
-        fmt.Println("Пароли НЕ совпадают")
+    err=bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+    if err!=nil{
+        fmt.Println("Пароли не совпадают",err)
         return false
     }
-
-    fmt.Println("Пароли совпадают")
+    fmt.Println("Пароли совпадают!")
     return true
 }
 
+
 func (d *DB) AddUser(username, password string) error {
-    _, err := d.Conn.Exec(
+    hashedPassword,err:=bcrypt.GenerateFromPassword([]byte(password),bcrypt.DefaultCost)  // Хеширую пароль
+    if err!=nil{
+        return err
+    }
+
+    _, err = d.Conn.Exec(
         "INSERT INTO users (username, password) VALUES ($1, $2)",
-        username, password,
+        username, string(hashedPassword),
     )
     return err
 }
