@@ -12,6 +12,9 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 )
 
-require github.com/dlclark/regexp2 v1.10.0 // indirect
+require (
+	github.com/dlclark/regexp2 v1.10.0 // indirect
+	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
+)
 
 replace github.com/ledongthuc/pdf => github.com/ledongthuc/pdf v0.0.0-20231018095937-f842532e4442
