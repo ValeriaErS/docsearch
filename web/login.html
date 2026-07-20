@@ -297,36 +297,41 @@
         const registerLink = document.getElementById('registerLink');
 
         loginBtn.addEventListener('click', async function() {
-            const username = loginInput.value.trim();
-            const password = passwordInput.value.trim();
+        const username = loginInput.value.trim();
+        const password = passwordInput.value.trim();
 
-            if (!username || !password) {
-                loginError.textContent = 'Заполните все поля';
+        if (!username || !password) {
+            loginError.textContent = 'Заполните все поля';
+            loginError.classList.add('show');
+            return;
+        }
+
+        try {
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+    
+                localStorage.setItem('token', data.token);     // сохраняю токен и имяВ localStorage
+                localStorage.setItem('user', data.user);
+
+                
+                window.location.href = '/chat.html';  // Переход в чат
+            } else {
+                loginError.textContent = data.error || 'Неверный логин или пароль';
                 loginError.classList.add('show');
-                return;
             }
-
-            try {
-                const res = await fetch('/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
-                const data = await res.json();
-
-                if (data.success) {
-                    window.location.href = '/chat.html?user=' + encodeURIComponent(username);
-                } else {
-                    loginError.textContent = 'Неверный логин или пароль';
-                    loginError.classList.add('show');
-                }
-            } catch (e) {
-                loginError.textContent = 'Ошибка соединения с сервером';
-                loginError.classList.add('show');
-            }
-        });
-
+        } catch (e) {
+            loginError.textContent = 'Ошибка соединения с сервером';
+            loginError.classList.add('show');
+        }
+    });
+                
         loginInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') loginBtn.click();
         });

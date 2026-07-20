@@ -10,6 +10,7 @@ import (
     "docsearch/internal/embed"
     "docsearch/internal/llm"
     "docsearch/internal/vector"
+    "docsearch/internal/auth"
 )
 
 var chatHistory = make(map[string][]map[string]string)
@@ -51,26 +52,43 @@ func runWeb(cfg *config.Config, port string) {
             http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)
             return
         }
-
-        var req struct {
+        var req struct{
             Username string `json:"username"`
             Password string `json:"password"`
         }
-
         err := json.NewDecoder(r.Body).Decode(&req)
+    if err != nil {
+        http.Error(w, "Ошибка чтения", http.StatusBadRequest)
+        return
+    }
+
+    
+    ok := database.CheckUser(req.Username, req.Password) // Проверяю пользователя в базе
+
+    if ok {
+        
+        token, err := auth.MakeToken(req.Username) // создаю токен
         if err != nil {
-            http.Error(w, "Ошибка чтения", http.StatusBadRequest)
+            http.Error(w, "Ошибка создания токена", http.StatusInternalServerError)
             return
         }
 
-        ok := database.CheckUser(req.Username, req.Password)
-
+        
+        w.Header().Set("Content-Type", "application/json")  // Отправляю токен и имя пользователя
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "success": true,
+            "user": req.Username,
+            "token": token,
+        })
+    } else {
         w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(map[string]interface{}{
-            "success": ok,
-            "user": req.Username,
+            "success": false,
+            "error": "Неверный логин или пароль",
         })
-    })
+    }
+})
+
 
     
     http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {  // регистрация
@@ -216,7 +234,16 @@ func findAnswer(cfg *config.Config, question string, userID string) (string, []m
     }
     sources = uniqueSources
 
-    answer, err := llm.GetAnswerWithHistory(question, context, chatHistory[userID])
+docNames := []string{}
+for _, s := range sources {
+    docNames = append(docNames, s["doc_id"].(string))
+}
+
+answer, err := llm.GetAnswerWithHistory(question, context, docNames, chatHistory[userID])
+if err != nil {
+    fmt.Println("Ошибка LLM:", err)
+    return "Ошибка: нейросеть не отвечает", sources
+}
     if err != nil {
         fmt.Println("Ошибка LLM:", err)
         return "Ошибка: нейросеть не отвечает", sources
