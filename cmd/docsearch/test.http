@@ -1,4 +1,0 @@
-POST http://localhost:9090/ask
-Content-Type: application/json
-
-{"query":"Что такое эмбеддинги?"}

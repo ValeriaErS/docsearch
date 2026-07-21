@@ -3,6 +3,7 @@ module docsearch
 go 1.20
 
 require (
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
@@ -12,9 +13,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 )
 
-require (
-	github.com/dlclark/regexp2 v1.10.0 // indirect
-	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
-)
+require github.com/dlclark/regexp2 v1.10.0 // indirect
 
 replace github.com/ledongthuc/pdf => github.com/ledongthuc/pdf v0.0.0-20231018095937-f842532e4442
