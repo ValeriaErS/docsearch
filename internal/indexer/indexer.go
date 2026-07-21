@@ -108,8 +108,27 @@ func (i *Indexer) Index() error {
 func (i *Indexer) saveDoc(doc corpus.Document) {
     chunks := chunk.SplitIntelligent(doc.Text, doc.Name, i.Config.Chunking.MaxTokens)
 
-    for _, ch := range chunks {
-        vec, err := embed.GetEmbedding(ch.Text)  // получаю эмбеддинг
+    fmt.Printf("Документ: %s, страниц: %d\n", doc.Name, len(doc.Pages))
+
+    for idx, ch := range chunks {
+       
+        page := 1
+        if doc.Pages != nil && len(doc.Pages) > 0 {
+           
+            totalPages := len(doc.Pages)      // распределяю чанки по страницам
+            chunksPerPage := len(chunks) / totalPages
+            if chunksPerPage == 0 {
+                chunksPerPage = 1
+            }
+            page = idx/chunksPerPage + 1
+            if page > totalPages {
+                page = totalPages
+            }
+        }
+        fmt.Printf("   Чанк %d: страница %d\n", idx+1, page)
+
+        
+        vec, err := embed.GetEmbedding(ch.Text) // получаю эмбеддинг
         if err != nil {
             fmt.Println("Ошибка эмбеддинга:", err)
             continue
@@ -128,7 +147,8 @@ func (i *Indexer) saveDoc(doc corpus.Document) {
             "section": ch.Section,
             "level": ch.Level,
             "token_count": ch.TokenCount,
-            "user_id": i.UserID, 
+            "user_id": i.UserID,
+            "page": page, 
         }
 
         err = i.VectorClient.Save("documents", id, vec32, data)
@@ -137,6 +157,7 @@ func (i *Indexer) saveDoc(doc corpus.Document) {
         }
     }
 }
+
 
 func (i *Indexer) deleteDoc(name string) {  //удаляю все чанки дока из бд
     filter := map[string]interface{}{"doc_id": name}
@@ -161,3 +182,9 @@ func (i *Indexer) deleteAllUserDocs() {
     i.VectorClient.Delete("documents", filter)
     fmt.Printf("Все документы пользователя %s удалены\n", i.UserID)
 }
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+    }

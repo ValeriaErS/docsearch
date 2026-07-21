@@ -10,7 +10,7 @@ import (
 )
 
 type DB struct {
-    Conn *sql.DB
+    Conn *sql.DB   // подключение к бд
 }
 
 func NewDB() (*DB, error) {
@@ -21,12 +21,12 @@ func NewDB() (*DB, error) {
         return nil, fmt.Errorf("нет ссылки на базу")
     }
 
-    conn, err := sql.Open("postgres", connStr)
+    conn, err := sql.Open("postgres", connStr)   // открываю соединение
     if err != nil {
         return nil, err
     }
 
-    err = conn.Ping()
+    err = conn.Ping()   // проверяю, что база отвечает
     if err != nil {
         return nil, err
     }
@@ -40,7 +40,7 @@ func (d *DB) Close() {
 }
 
 func (d *DB) CheckUser(username, password string) bool {
-    var hashedPassword string
+    var hashedPassword string   // сюда хеш из базы
 
     err:=d.Conn.QueryRow("SELECT password FROM users WHERE username = $1", username).Scan(&hashedPassword)
     if err!=nil{
@@ -58,14 +58,14 @@ func (d *DB) CheckUser(username, password string) bool {
 
 
 func (d *DB) AddUser(username, password string) error {
-    hashedPassword,err:=bcrypt.GenerateFromPassword([]byte(password),bcrypt.DefaultCost)  // Хеширую пароль
+    hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)  // Хеширую пароль
     if err!=nil{
         return err
     }
 
     _, err = d.Conn.Exec(
         "INSERT INTO users (username, password) VALUES ($1, $2)",
-        username, string(hashedPassword),
+        username, string(hashed),
     )
     return err
 }

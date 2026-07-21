@@ -31,14 +31,16 @@
         }
 
         .msg .timing {
-            margin-top: 8px;
-            font-size: 12px;
-            opacity: 0.4;
-            text-align: right;
-            border-top: 1px solid rgba(255,255,255,0.05);
-            padding-top: 6px;
-            display: block !important;
-        }
+        margin-top: 8px;
+        font-size: 12px;
+    opacity: 0.4;
+    text-align: right;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    padding-top: 6px;
+    display: block !important;
+    font-family: monospace;
+    font-size: 11px;
+}
 
         .background {
             position: absolute;
@@ -323,7 +325,7 @@
         const input = document.getElementById('question');
         const btn = document.getElementById('sendBtn');
 
-        function addMessage(text, isUser, sources, duration) {
+        function addMessage(text, isUser, sources, timings) {
             const msg = document.createElement('div');
             msg.className = `msg ${isUser ? 'user' : 'bot'}`;
 
@@ -339,21 +341,30 @@
                 msg.appendChild(src);
             }
 
-            if (!isUser && duration) {
-                const timeDiv = document.createElement('div');
-                timeDiv.className = 'timing';
-                timeDiv.textContent = `⏱️ ${duration.toFixed(2)} сек`;
-                timeDiv.style.fontSize = '12px';
-                timeDiv.style.opacity = '0.4';
-                timeDiv.style.marginTop = '6px';
-                timeDiv.style.borderTop = '1px solid rgba(255,255,255,0.05)';
-                timeDiv.style.paddingTop = '6px';
-                msg.appendChild(timeDiv);
-            }
+            if (!isUser && timings) {
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'timing';
+        timeDiv.style.fontSize = '12px';
+        timeDiv.style.opacity = '0.5';
+        timeDiv.style.marginTop = '6px';
+        timeDiv.style.borderTop = '1px solid rgba(255,255,255,0.05)';
+        timeDiv.style.paddingTop = '6px';
+        timeDiv.style.whiteSpace = 'pre-line';
+        timeDiv.style.fontFamily = 'monospace';
+        timeDiv.style.fontSize = '11px';
 
-            chat.appendChild(msg);
-            chat.scrollTop = chat.scrollHeight;
-        }
+        let text = `Общее время: ${timings.total.toFixed(2)} сек\n`;
+        text += `── Эмбеддинг: ${timings.embed.toFixed(2)} сек\n`;
+        text += `── Поиск: ${timings.search.toFixed(2)} сек\n`;
+        text += `── LLM: ${timings.llm.toFixed(2)} сек`;
+
+        timeDiv.textContent = text;
+        msg.appendChild(timeDiv);
+    }
+
+    chat.appendChild(msg);
+    chat.scrollTop = chat.scrollHeight;
+}
 
         async function sendQuestion() {
             const q = input.value.trim();
@@ -384,10 +395,10 @@
 
                 const data = await res.json();
                 wait.remove();
-                console.log('Ответ сервера:', data);
+                
 
                 if (data.answer) {
-                    addMessage(data.answer, false, data.sources || [], data.duration);
+                    addMessage(data.answer, false, data.sources || [], data.timings);
                 } else {
                     addMessage('В документации такой информации не найдено.', false);
                 }

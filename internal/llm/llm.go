@@ -1,174 +1,166 @@
 package llm
 
 import (
-	"fmt"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"regexp"
+	"strings"
 	"github.com/joho/godotenv"
 )
 
 func init() {
-	godotenv.Load()
+	godotenv.Load() // ключик из env
 }
 
-func GetAnswerWithHistory(question string, chunks []string, docNames []string, history []map[string]string) (string, error) {
-	apiKey := os.Getenv("LLM_API_KEY")
-	if apiKey == "" {
-		return "", fmt.Errorf("нет ключа")
-	}
+func GetAnswerWithHistory(question string, chunks []string, docNames []string, pages []int, history []map[string]string) (string, error) {
+    apiKey := os.Getenv("LLM_API_KEY")
+    if apiKey == "" {
+        return "", fmt.Errorf("нет ключа")
+    }
 
-	url := "https://openrouter.ai/api/v1/chat/completions"
+    url := "https://openrouter.ai/api/v1/chat/completions"
 
-	
-	context := ""
-	for i := 0; i < len(chunks); i++ {
-		docName := "документ"
-		if i < len(docNames) && docNames[i] != "" && docNames[i] != "неизвестный документ" {
-			docName = docNames[i]
-		}
-		context = context + fmt.Sprintf("\n--- %s ---\n%s", docName, chunks[i])
-	}
+    
+    context := ""          // склеиваю чанки с указанием источника и страницы
+    for i := 0; i < len(chunks); i++ {
+        docName := "неизвестный документ"
+        if i < len(docNames) && docNames[i] != "" {
+            docName = docNames[i]
+        }
+        
+        page := 1   // беру реальную страницу
+        if i < len(pages) && pages[i] > 0 {
+            page = pages[i]
+        }
+        context = context + fmt.Sprintf("\n--- Источник: %s, страница: %d ---\n%s", docName, page, chunks[i])
+    }
 
-	messages := []map[string]string{}
+    
+    fmt.Printf("Контекст для LLM, страниц: %d\n", len(pages))
+    if len(pages) > 0 {
+        fmt.Printf("Страницы: %v\n", pages)
+    }
 
-	systemPrompt := fmt.Sprintf(`Ты помощник. Отвечай на вопрос на русском языке, используя только информацию из документов ниже.
-Если в документах нет ответа, скажи, что не знаешь.
-Указывай источник сразу после каждого утверждения или абзаца в формате [название_файла].
-Например: "FTPController предназначен для мониторинга документов [ftpcontroller_tech.pdf]".
-Если название файла не указано в контексте — НЕ ставь источник и НЕ пиши "неизвестный документ" или "документ".
-Не используй Markdown-разметку (звёздочки, решётки, таблицы).
-Форматируй ответ: разделяй абзацы пустыми строками, используй переносы строк между пунктами.
+    messages := []map[string]string{}
+
+    systemPrompt := fmt.Sprintf(`Ты помощник. Отвечай строго на русском языке, используя только информацию из документов ниже.
+Если в документах нет ответа, скажи: "В документации нет информации по этому вопросу".
+
+ВАЖНО: После каждого утверждения или абзаца обязательно указывай источник в формате: [источник: название_файла.pdf, страница N]
+
+Номер страницы бери из контекста (там написано "страница: X").
+Не выдумывай страницы, которых нет в контексте.
+Не выдумывай источники, которых нет в контексте.
+Не используй звёздочки, решётки или таблицы.
+Форматируй ответ: разделяй абзацы пустыми строками.
+
 Контекст из документов:
-%s`, context)
+%s
 
-	messages = append(messages, map[string]string{
-		"role": "system",
-		"content": systemPrompt,
-	})
+Вопрос: %s
+Ответ:`, context, question)
 
-	
-	start := 0
-	if len(history) > 6 {
-		start = len(history) - 6
-	}
-	for i := start; i < len(history); i++ {
-		messages = append(messages, history[i])
-	}
+    messages = append(messages, map[string]string{
+        "role": "system",
+        "content": "Ты помощник. Отвечай только по документам. Всегда указывай источник в формате [источник: название_файла.pdf, страница N].",
+    })
 
-	
-	messages = append(messages, map[string]string{
-		"role": "user",
-		"content": question,
-	})
+    messages = append(messages, map[string]string{
+        "role": "user",
+        "content": systemPrompt,
+    })
 
-	data := map[string]interface{}{
-		"model": "openrouter/free",
-		"messages": messages,
-		"temperature": 0.1,
-		"max_tokens": 1024,
-	}
+    
+    start := 0        // добавляю историю
+    if len(history) > 4 {
+        start = len(history) - 4
+    }
+    for i := start; i < len(history); i++ {
+        messages = append(messages, history[i])
+    }
 
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return "", err
-	}
+    data := map[string]interface{}{
+        "model": "openrouter/free",
+        "messages": messages,
+        "temperature": 0.1,
+        "max_tokens": 1024,
+    }
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", err
-	}
+    jsonData, err := json.Marshal(data)
+    if err != nil {
+        return "", err
+    }
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("HTTP-Referer", "http://localhost")
-	req.Header.Set("X-Title", "docsearch")
+    req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+    if err != nil {
+        return "", err
+    }
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Authorization", "Bearer "+apiKey)
+    req.Header.Set("HTTP-Referer", "http://localhost")
+    req.Header.Set("X-Title", "docsearch")
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        return "", err
+    }
+    defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("ошибка %d: %s", resp.StatusCode, string(body))
-	}
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return "", err
+    }
 
-	var result struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
+    if resp.StatusCode != 200 {
+        return "", fmt.Errorf("ошибка %d: %s", resp.StatusCode, string(body))
+    }
 
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return "", err
-	}
+    var result struct {
+        Choices []struct {
+            Message struct {
+                Content string `json:"content"`
+            } `json:"message"`
+        } `json:"choices"`
+    }
 
-	if len(result.Choices) == 0 {
-		return "", fmt.Errorf("нет ответа от модели")
-	}
+    err = json.Unmarshal(body, &result)
+    if err != nil {
+        return "", err
+    }
 
-	answer := result.Choices[0].Message.Content
+    if len(result.Choices) == 0 {
+        return "", fmt.Errorf("нет ответа от модели")
+    }
 
+    answer := result.Choices[0].Message.Content
 
-	
-	answer = strings.ReplaceAll(answer, "**", "")
-	answer = strings.ReplaceAll(answer, "*", "")
+   
+    answer = strings.ReplaceAll(answer, "**", "")
+    answer = strings.ReplaceAll(answer, "*", "")
+    answer = strings.ReplaceAll(answer, "###", "")
+    answer = strings.ReplaceAll(answer, "##", "")
+    answer = strings.ReplaceAll(answer, "#", "")
 
-	
-	reTable := regexp.MustCompile(`(?m)^\|.*\|$`)
-	answer = reTable.ReplaceAllString(answer, "")
+   
+    answer = strings.ReplaceAll(answer, "[]", "")
+    answer = strings.ReplaceAll(answer, "[ ]", "")
+    answer = strings.ReplaceAll(answer, "()", "")
 
-	reSeparator := regexp.MustCompile(`(?m)\|[- :|]+\|`)
-	answer = reSeparator.ReplaceAllString(answer, "")
+    
+    re := regexp.MustCompile(`\n{3,}`)
+    answer = re.ReplaceAllString(answer, "\n\n")
 
-	
-	answer = strings.ReplaceAll(answer, "###", "")
-    answer = strings.ReplaceAll(answer, "[неизвестный документ]", "")
-	answer = strings.ReplaceAll(answer, "неизвестный документ", "")
-	answer = strings.ReplaceAll(answer, "[неизвестный]", "")
-    answer = strings.ReplaceAll(answer, "[документ]", "")  
-    answer = strings.ReplaceAll(answer, "документ", "") 
+    answer = strings.TrimSpace(answer)
 
-	
-	reBrackets := regexp.MustCompile(`\[\s*\]`)
-	answer = reBrackets.ReplaceAllString(answer, "")
-
-	
-	for i := 1; i <= 10; i++ {
-		old := fmt.Sprintf("%d.", i)
-		new := fmt.Sprintf("\n\n%d.", i)
-		answer = strings.ReplaceAll(answer, old, new)
-	}
-
-	answer = strings.ReplaceAll(answer, "Источники:", "\n\nИсточники:")
-
-	
-	re := regexp.MustCompile(`\n{3,}`)
-	answer = re.ReplaceAllString(answer, "\n\n")
-
-	
-	answer = strings.TrimSpace(answer)
-
-
-
-	return answer, nil
+    return answer, nil
 }
-
 
 func GetAnswer(question string, chunks []string) (string, error) {
-    return GetAnswerWithHistory(question, chunks, []string{}, []map[string]string{})
+	return GetAnswerWithHistory(question, chunks, []string{}, []int{}, []map[string]string{})
 }

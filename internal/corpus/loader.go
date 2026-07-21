@@ -1,18 +1,22 @@
 package corpus 
 import(
 	"os"
+	"fmt"
 	"path/filepath"
 	"github.com/ledongthuc/pdf"
 	"strings"  
 )
-func readPDF(path string) (string,error){   // читаю PDF файл и достаю из него текст
+
+func readPDF(path string) (string, map[int]string, error){   // читаю PDF файл и достаю из него текст
 	file,reader,err:=pdf.Open(path)
 	if err!=nil{
-		return "",err
+		return "",nil,err
 	}
 	defer file.Close()
 
-	var text strings.Builder
+	var fullText strings.Builder
+	pages := make(map[int]string)
+
 	for i:=1;i<=reader.NumPage();i++{         // прохожу по всем страницам
 	page:=reader.Page(i)
 	if page.V.IsNull(){
@@ -22,10 +26,11 @@ func readPDF(path string) (string,error){   // читаю PDF файл и дос
 	if err!=nil{
 		continue
 	}
-	text.WriteString(content)
-	text.WriteString("\n")
-}
-return text.String(),nil
+	pages[i] = content
+		fullText.WriteString(content)
+		fullText.WriteString("\n")
+	}
+	return fullText.String(), pages, nil
 }
 
 func LoadDocuments(path string)([]Document,error) { //читаем док,возврат списка
@@ -33,7 +38,7 @@ func LoadDocuments(path string)([]Document,error) { //читаем док,воз
 	if err!=nil{
 		return nil,err
 	}
-	var docs []Document                  //Пустой список 
+	var docs []Document  //Пустой список 
 	
 	for _,file:=range files {
 		if file.IsDir () { 
@@ -47,24 +52,29 @@ func LoadDocuments(path string)([]Document,error) { //читаем док,воз
 	}
 fullPath:=filepath.Join(path,name)
 var text string
+var pages map[int]string
 
 if ext==".pdf"{
-	text,err=readPDF(fullPath)        // если PDF, то читаю особым способом
+	text, pages, err = readPDF(fullPath) 
+	fmt.Printf("Документ %s: %d страниц\n", name, len(pages))  
 }else {
 	data,err:=os.ReadFile(fullPath)
 	if err!=nil{
 		return nil,err
 	}
 	text=string(data)
+	pages = nil
 }
 if err!=nil{
 	return nil,err
 }
-doc:=Document{                 // создаю документ и нормализую текст
+doc:=Document{  // создаю документ и нормализую текст
 	Name:name,
 	Text:NormalizeNext(text),
+	Pages: pages,
 }
 docs=append(docs,doc)
+
 }
 return docs,nil
 }
