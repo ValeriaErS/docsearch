@@ -75,7 +75,7 @@ func main() {
     if question != "" {    // если задан вопрос
         startTime := time.Now()
 
-        results, docs, scores, answer := rag.Ask(*cfg, question)
+        results, docs, scores, answer := rag.Ask(*cfg, question, userID)
 
         found := false     // проверяю порог
         for i := 0; i < len(scores); i++ {

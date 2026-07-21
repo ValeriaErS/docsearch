@@ -1,92 +1,53 @@
 package rag
 
 import (
-    "fmt"
     "docsearch/internal/config"
-    "docsearch/internal/corpus"
-    "docsearch/internal/chunk"
     "docsearch/internal/embed"
-    "docsearch/internal/retrieve"
     "docsearch/internal/llm"
+    "docsearch/internal/vector"
 )
 
-func Index(cfg config.Config) {  //загрузка,режу,считаю эмбеддинг
-    docs, err := corpus.LoadDocuments(cfg.Corpus.Path)
+
+func Ask(cfg config.Config, question string, userID string) ([]string, []string, []float64, string) {   // возвращает тексты, имена документов, оценки, ответ 
+    
+    vec, err := embed.GetEmbedding(question)  // делаю вектор из вопроса
     if err != nil {
-        fmt.Println("Ошибка загрузки:", err)
-        return
-    }
-
-    fmt.Println("Количество документов:", len(docs))
-
-    allText := []string{}
-    allDocs := []string{}
-    allVectors := [][]float64{}
-
-    for i := 0; i < len(docs); i++ {
-        doc := docs[i]
-        parts := chunk.SplitText(doc.Text, cfg.Chunking.MaxTokens, cfg.Chunking.OverlapTokens, doc.Name)
-
-        for j := 0; j < len(parts); j++ {
-            one := parts[j]
-            vec, err := embed.GetEmbedding(one.Text)   // получаю вектор через LM Studio
-            if err != nil {
-                continue
-            }
-            allText = append(allText, one.Text)
-            allDocs = append(allDocs, doc.Name)
-            allVectors = append(allVectors, vec)
-    }
-  }
-}
-
-func Ask(cfg config.Config, question string) ([]string, []string, []float64, string) {   // поиск по вопросу, нахожу похожие чанки и получаю ответ от LLM
-    docs, err := corpus.LoadDocuments(cfg.Corpus.Path)
-    if err != nil {
-        return []string{}, []string{}, []float64{}, "Ошибка загрузки документов"
-    }
-
-    allText := []string{}
-    allDocs := []string{}
-    allVectors := [][]float64{}
-
-    for i := 0; i < len(docs); i++ {
-        doc := docs[i]
-        parts := chunk.SplitText(doc.Text, cfg.Chunking.MaxTokens, cfg.Chunking.OverlapTokens, doc.Name)
-        for j := 0; j < len(parts); j++ {
-            one := parts[j]
-            vec, err := embed.GetEmbedding(one.Text)
-            if err != nil {
-                continue
-            }
-            allText = append(allText, one.Text)
-            allDocs = append(allDocs, doc.Name)
-            allVectors = append(allVectors, vec)
-        }
-    }
-
-    questionVec, err := embed.GetEmbedding(question)  // вектор для вопроса
-    if err != nil {
-        return []string{}, []string{}, []float64{}, "Ошибка получения вектора вопроса"
-    }
-
-    foundTexts, foundDocs, foundScores := retrieve.Search(allText,allDocs, allVectors, questionVec, cfg.Retrieval.TopK)    // ищу похожие чанки
-
-    if len(foundTexts) == 0 {
-        return foundTexts, foundDocs, foundScores, "Ответа в документации не найдено."
+        return []string{}, []string{}, []float64{}, "не могу понять ваш вопрос"
     }
 
    
-    var answer string                        // проверяю, какой режим LLM включён
-    if cfg.LLM.Provider == "mock" {
-        answer = llm.GetMockAnswer(question, foundTexts)
-    } else {
-       
-        answer, err = llm.GetAnswer(question, foundTexts)
-        if err != nil {
-            return foundTexts, foundDocs, foundScores, "Не удалось получить ответ от нейросети."
-        }
+    vec32 := []float32{}
+    for i := 0; i < len(vec); i++ {
+        vec32 = append(vec32, float32(vec[i]))
     }
 
-    return foundTexts, foundDocs, foundScores, answer
+   
+    client := vector.NewQdrantClient()    // подключаюсь
+    client.VectorSize = cfg.Embeddings.VectorSize
+
+    
+    results, err := client.Search("documents", vec32, cfg.Retrieval.TopK, userID)
+    if err != nil || len(results) == 0 {
+        return []string{}, []string{}, []float64{}, "ничего не нашла"
+    }
+
+    
+    texts := []string{}   // достаю текст, имена файлов и оценки
+    docs := []string{}
+    scores := []float64{}
+
+    for _, r := range results {
+        payload := r["payload"].(map[string]interface{})
+        texts = append(texts, payload["chunk_text"].(string))
+        docs = append(docs, payload["doc_id"].(string))
+        scores = append(scores, r["score"].(float64))
+    }
+
+   
+    answer, err := llm.GetAnswer(question, texts)
+    if err != nil {
+        return texts, docs, scores, "LLM не отвечает"
+    }
+
+    return texts, docs, scores, answer
 }
