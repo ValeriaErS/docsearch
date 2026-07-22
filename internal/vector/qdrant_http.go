@@ -114,7 +114,7 @@ func (q *QdrantClient) Search(name string, vec []float32, limit int, userID stri
         "with_payload": true,
         }
 
-    if userID != "" && userID != "admin" {
+    if userID != "" {
         d["filter"] = map[string]interface{}{
             "must": []map[string]interface{}{
                 {

@@ -3,7 +3,7 @@ corpus:
     formats: ["md", "txt", "pdf", "html"]
 
 chunking:
-    max_tokens: 1024
+    max_tokens: 512
     overlap_tokens: 64
 
 embeddings:
@@ -23,6 +23,3 @@ llm:
     temperature: 0.1
     max_tokens: 1024
 
-qdrant:
-    host: "7f135234-4815-4a7a-acf6-9bd366766324.eu-central-1-0.aws.cloud.qdrant.io"
-    api_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIiwic3ViamVjdCI6ImFwaS1rZXk6YTRjOGQwZGItMTYxNy00Y2IwLWI1YTItMTM0ZTNjMGY3ZGNkIn0.J6ew68-0T8B2PpSpaq1cDSXuDRe6tDBdujR3RA3G25s"

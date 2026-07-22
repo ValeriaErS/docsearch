@@ -1,11 +1,18 @@
 package corpus
-import "testing"
+import (
+"os"
+"testing"
+)
  
 func TestReadPDF(t *testing.T) {            // проверяю, что PDF читается
-    text, pages, err := readPDF("docs/test.pdf")
 
-    if err!= nil {                          // если ошибка,тест провален
-        t.Skip("Нет test.pdf или ошибка чтения")
+    if _, err:=os.Stat("docs/test.pdf");err!=nil {                          // если ошибка,тест провален
+        t.Skip("Нет test.pdf, пропускаем тест")
+        return
+    }
+    text,pages,err:=readPDF("docs/test.pdf")
+    if err!=nil{
+        t.Skip("Ошибка чтения test.pdf")
         return
     }
     if len(text) == 0 {                   // если текст пустой,тест провален

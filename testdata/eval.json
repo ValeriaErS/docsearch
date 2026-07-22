@@ -1,0 +1,22 @@
+[
+    {
+        "query": "Что такое FileAuditor?",
+        "expected_docs": ["fileauditor_description.pdf"]
+    },
+    {
+        "query": "Для чего нужен FileAuditor?",
+        "expected_docs": ["fileauditor_description.pdf"]
+    },
+    {
+        "query": "Какие функции у FileAuditor?",
+        "expected_docs": ["fileauditor_description.pdf"]
+    },
+    {
+        "query": "Что делает FileAuditor?",
+        "expected_docs": ["fileauditor_description.pdf"]
+    },
+    {
+        "query": "FileAuditor описание",
+        "expected_docs": ["fileauditor_description.pdf"]
+    }
+]

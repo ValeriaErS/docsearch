@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,13 +12,31 @@ import (
 	"docsearch/internal/config"
 	"docsearch/internal/db"
 	"docsearch/internal/rag"
+	"path/filepath"
 )
 func sanitizeUsername(username string) string{
 	re:=regexp.MustCompile(`[^a-zA-Zа-яА-Я0-9_ ]`)
 	return re.ReplaceAllString(username,"")
 }
+func makeSafeUserDir(username string) (string, error) {  //безопасен ли путь
+    safeName := sanitizeUsername(username)
+    if safeName == "" {
+        return "", fmt.Errorf("пустое имя")
+    }
+
+    fullPath := filepath.Join("docs", safeName)
+
+    cleanPath := filepath.Clean(fullPath)
+    if !strings.HasPrefix(cleanPath, "docs/") {
+        return "", fmt.Errorf("небезопасное имя пользователя")
+    }
+    
+    return cleanPath, nil
+}
+
 
 var chatHistory = make(map[string][]map[string]string)
+var chatMutex sync.RWMutex
 var database *db.DB
 var globalCfg *config.Config
 
@@ -149,9 +168,13 @@ func handleRegister(w http.ResponseWriter, r *http.Request) { // обработ�
 		return
 	}
 
-    userDir := "docs/" + safeUsername                   // создаю папку
-	os.MkdirAll(userDir, 0755)
-	fmt.Println("Папка создана:", userDir)
+    userDir, err := makeSafeUserDir(req.Username)
+    if err != nil {
+    http.Error(w, err.Error(), http.StatusBadRequest)
+    return
+}
+    os.MkdirAll(userDir, 0755)
+    fmt.Println("Папка создана:", userDir)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -201,10 +224,12 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 		chatHistory[userID] = []map[string]string{}
 	}
 
-	chatHistory[userID] = append(chatHistory[userID], map[string]string{
-		"role": "user",
-		"content": req.Query,
-	})
+	chatMutex.Lock()
+    chatHistory[userID] = append(chatHistory[userID], map[string]string{
+    "role":"user",
+    "content": req.Query,
+})
+chatMutex.Unlock()
 
 	texts, docs, scores, answer := rag.Ask(*globalCfg, req.Query, userID)
 
@@ -212,30 +237,33 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 	for i := 0; i < len(texts); i++ {
 		sources = append(sources, map[string]interface{}{
 			"doc_id": docs[i],
-			"score":  scores[i],
+			"score": scores[i],
 		})
 	}
 
-	chatHistory[userID] = append(chatHistory[userID], map[string]string{
-		"role": "assistant",
-		"content": answer,
-	})
+	chatMutex.Lock()
+    chatHistory[userID] = append(chatHistory[userID], map[string]string{
+    "role":    "assistant",
+    "content": answer,
+})
+chatMutex.Unlock()
+
 	var timings map[string]float64
 	if globalCfg.LLM.Provider == "mock" {
 		timings = nil // в моке время не показываем
 	} else {
 	
 		timings = map[string]float64{
-			"total":  0,
-			"embed":  0,
+			"total":0,
+			"embed":0,
 			"search": 0,
-			"llm":    0,
+			"llm": 0,
 		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"answer":  answer,
+		"answer": answer,
 		"sources": sources,
 		"timings": timings,
 	})

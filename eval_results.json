@@ -1,0 +1,67 @@
+[
+  {
+    "query": "Что такое FileAuditor?",
+    "found_docs": [
+      "mock_document1.pdf",
+      "mock_document2.pdf",
+      "mock_document3.pdf"
+    ],
+    "expected_docs": [
+      "fileauditor_description.pdf"
+    ],
+    "recall": 0,
+    "success": false
+  },
+  {
+    "query": "Для чего нужен FileAuditor?",
+    "found_docs": [
+      "mock_document1.pdf",
+      "mock_document2.pdf",
+      "mock_document3.pdf"
+    ],
+    "expected_docs": [
+      "fileauditor_description.pdf"
+    ],
+    "recall": 0,
+    "success": false
+  },
+  {
+    "query": "Какие функции у FileAuditor?",
+    "found_docs": [
+      "mock_document1.pdf",
+      "mock_document2.pdf",
+      "mock_document3.pdf"
+    ],
+    "expected_docs": [
+      "fileauditor_description.pdf"
+    ],
+    "recall": 0,
+    "success": false
+  },
+  {
+    "query": "Что делает FileAuditor?",
+    "found_docs": [
+      "mock_document1.pdf",
+      "mock_document2.pdf",
+      "mock_document3.pdf"
+    ],
+    "expected_docs": [
+      "fileauditor_description.pdf"
+    ],
+    "recall": 0,
+    "success": false
+  },
+  {
+    "query": "FileAuditor описание",
+    "found_docs": [
+      "mock_document1.pdf",
+      "mock_document2.pdf",
+      "mock_document3.pdf"
+    ],
+    "expected_docs": [
+      "fileauditor_description.pdf"
+    ],
+    "recall": 0,
+    "success": false
+  }
+]

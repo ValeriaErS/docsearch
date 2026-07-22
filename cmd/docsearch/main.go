@@ -20,6 +20,7 @@ func main() {
     serveMode := false
     port := ":8080"
     userID := ""
+    evalMode := false
 
     for i := 0; i < len(args); i++ {   // разбираю команды
         if args[i] == "--config" && i+1 < len(args) {
@@ -43,12 +44,18 @@ func main() {
         } else if args[i]=="--user" && i+1<len(args){
             userID=args[i+1]
             i = i + 1
+        } else if args[i] == "eval" {
+            evalMode = true 
         }
-    }
+}
 
     cfg, err := config.LoadConfig(configFile)
     if err != nil {
         fmt.Println("Ошибка загрузки конфига:", err)
+        return
+    }
+    if evalMode {
+        runEval(cfg)
         return
     }
 
@@ -71,6 +78,11 @@ func main() {
         fmt.Println("С индексацией все хорошо")
         return
     }
+    if len(args) > 0 && args[0] == "eval" {
+        runEval(cfg)
+        return
+    }
+
 
     if question != "" {    // если задан вопрос
         startTime := time.Now()
@@ -112,8 +124,8 @@ func main() {
                 snippet = snippet[:100] + "..."
             }
             sources = append(sources, Source{
-                DocID:   docs[i],
-                Score:   scores[i],
+                DocID: docs[i],
+                Score: scores[i],
                 Snippet: snippet,
             })
         }
@@ -154,4 +166,5 @@ func main() {
     fmt.Println("serve - запустить HTTP сервер")
     fmt.Println("port :8080 - порт для сервера")
     fmt.Println("web - запустить веб-интерфейс")
+    fmt.Println("eval - оценка качества поиска")
 }
