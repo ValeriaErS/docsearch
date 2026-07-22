@@ -33,7 +33,6 @@ func TestSplitTextSizeZero(t *testing.T) {         //проверяю что р�
     text:= "маленький текст"
     size:= 0
     overlap:= 5
-    docName:= "test.md"
 
     chunks:= SplitText(text, size, overlap, docName)
 

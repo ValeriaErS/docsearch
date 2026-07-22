@@ -2,7 +2,7 @@ package corpus
 import "testing"
  
 func TestReadPDF(t *testing.T) {            // проверяю, что PDF читается
-    text, err:= readPDF("docs/test.pdf")
+    text, pages, err := readPDF("docs/test.pdf")
 
     if err!= nil {                          // если ошибка,тест провален
         t.Skip("Нет test.pdf или ошибка чтения")
@@ -10,6 +10,9 @@ func TestReadPDF(t *testing.T) {            // проверяю, что PDF чи
     }
     if len(text) == 0 {                   // если текст пустой,тест провален
         t.Error("PDF пустой")
+    }
+    if len(pages) == 0 {
+        t.Error("PDF не содержит страниц")
     }
 }
 func TestLoadPDF(t *testing.T) {         // проверяю, что PDF загружается через LoadDocuments
