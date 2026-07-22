@@ -393,9 +393,9 @@
                 });
 
                 const data = await res.json();
+                console.log("Ответ от сервера:", data);
                 wait.remove();
                 
-
                 if (data.answer) {
                     addMessage(data.answer, false, data.sources || [], data.timings);
                 } else {
@@ -404,6 +404,7 @@
             } catch (e) {
                 wait.remove();
                 addMessage('Ошибка соединения с сервером.', false);
+                console.error("Ошибка:", e);
             }
         }
 

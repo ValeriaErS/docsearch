@@ -219,47 +219,34 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 	}
 
 	userID := username
-
+    
+	chatMutex.Lock()
 	if chatHistory[userID] == nil {
 		chatHistory[userID] = []map[string]string{}
 	}
-
-	chatMutex.Lock()
     chatHistory[userID] = append(chatHistory[userID], map[string]string{
     "role":"user",
     "content": req.Query,
 })
 chatMutex.Unlock()
 
-	texts, docs, scores, answer := rag.Ask(*globalCfg, req.Query, userID)
+	texts, docs, scores, answer, pages, timings := rag.Ask(*globalCfg, req.Query, userID)
 
 	sources := []map[string]interface{}{}
 	for i := 0; i < len(texts); i++ {
 		sources = append(sources, map[string]interface{}{
 			"doc_id": docs[i],
 			"score": scores[i],
+			"page": pages[i],
 		})
 	}
 
 	chatMutex.Lock()
     chatHistory[userID] = append(chatHistory[userID], map[string]string{
-    "role":    "assistant",
+    "role": "assistant",
     "content": answer,
 })
 chatMutex.Unlock()
-
-	var timings map[string]float64
-	if globalCfg.LLM.Provider == "mock" {
-		timings = nil // в моке время не показываем
-	} else {
-	
-		timings = map[string]float64{
-			"total":0,
-			"embed":0,
-			"search": 0,
-			"llm": 0,
-		}
-	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

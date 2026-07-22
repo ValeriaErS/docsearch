@@ -70,7 +70,7 @@ func runEval(cfg *config.Config) {
     for i, q := range questions {
         fmt.Printf("--- Вопрос %d: \"%s\" ---\n", i+1, q.Query)
 
-        texts, docs, _, _ := rag.Ask(*cfg, q.Query, userForEval)
+        texts, docs, _, _, _, _ := rag.Ask(*cfg, q.Query, userForEval)
 
         fmt.Printf("Ожидаемые документы: %v\n", q.ExpectedDocs)
         fmt.Printf("Найденные документы: %v\n", docs)
