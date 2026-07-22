@@ -5,20 +5,25 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
-	"time"
 	"docsearch/internal/auth"
 	"docsearch/internal/config"
 	"docsearch/internal/db"
-	"docsearch/internal/embed"
-	"docsearch/internal/llm"
-	"docsearch/internal/vector"
+	"docsearch/internal/rag"
 )
+func sanitizeUsername(username string) string{
+	re:=regexp.MustCompile(`[^a-zA-Zа-яА-Я0-9_ ]`)
+	return re.ReplaceAllString(username,"")
+}
 
 var chatHistory = make(map[string][]map[string]string)
 var database *db.DB
+var globalCfg *config.Config
 
 func runWeb(cfg *config.Config, port string) {
+	globalCfg = cfg
+	
 	var err error
 	database, err = db.NewDB()
 	if err != nil {
@@ -36,6 +41,7 @@ func runWeb(cfg *config.Config, port string) {
 	http.HandleFunc("/login", handleLogin) // обработчики
 	http.HandleFunc("/register", handleRegister)
 	http.HandleFunc("/ask", handleAsk)
+	
 
 	fmt.Println("Сайт запущен: http://localhost" + port)
 	http.ListenAndServe("0.0.0.0"+port, nil)
@@ -118,6 +124,11 @@ func handleRegister(w http.ResponseWriter, r *http.Request) { // обработ�
 		http.Error(w, "Ошибка чтения", http.StatusBadRequest)
 		return
 	}
+	safeUsername := sanitizeUsername(req.Username)
+    if safeUsername == "" {
+        http.Error(w, "Некорректное имя пользователя", http.StatusBadRequest)
+        return
+    }
 
 	if len(req.Password) < 6 {
 		http.Error(w, "Пароль должен быть не менее 6 символов", http.StatusBadRequest)
@@ -132,20 +143,20 @@ func handleRegister(w http.ResponseWriter, r *http.Request) { // обработ�
 		}
 	}
 
-	err = database.AddUser(req.Username, req.Password)
+    err = database.AddUser(safeUsername, req.Password)
 	if err != nil {
 		http.Error(w, "Пользователь уже существует", http.StatusConflict)
 		return
 	}
 
-	userDir := "docs/" + req.Username // создаю папку
+    userDir := "docs/" + safeUsername                   // создаю папку
 	os.MkdirAll(userDir, 0755)
 	fmt.Println("Папка создана:", userDir)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"user":    req.Username,
+		"user": safeUsername,
 	})
 }
 
@@ -171,7 +182,6 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 
 	var req struct {
 		Query string `json:"query"`
-		User  string `json:"user"`
 	}
 
 	err = json.NewDecoder(r.Body).Decode(&req)
@@ -185,26 +195,43 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 		return
 	}
 
-	userID := req.User
-	if userID == "" {
-		userID = "default"
-	}
+	userID := username
 
 	if chatHistory[userID] == nil {
 		chatHistory[userID] = []map[string]string{}
 	}
 
 	chatHistory[userID] = append(chatHistory[userID], map[string]string{
-		"role":    "user",
+		"role": "user",
 		"content": req.Query,
 	})
 
-	answer, sources, timings := getAnswer(req.Query, userID)
+	texts, docs, scores, answer := rag.Ask(*globalCfg, req.Query, userID)
+
+	sources := []map[string]interface{}{}
+	for i := 0; i < len(texts); i++ {
+		sources = append(sources, map[string]interface{}{
+			"doc_id": docs[i],
+			"score":  scores[i],
+		})
+	}
 
 	chatHistory[userID] = append(chatHistory[userID], map[string]string{
-		"role":    "assistant",
+		"role": "assistant",
 		"content": answer,
 	})
+	var timings map[string]float64
+	if globalCfg.LLM.Provider == "mock" {
+		timings = nil // в моке время не показываем
+	} else {
+	
+		timings = map[string]float64{
+			"total":  0,
+			"embed":  0,
+			"search": 0,
+			"llm":    0,
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -212,85 +239,4 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 		"sources": sources,
 		"timings": timings,
 	})
-}
-
-func getAnswer(question string, userID string) (string, []map[string]interface{}, map[string]float64) {
-	startTotal := time.Now()
-
-	startEmbed := time.Now()
-	client := vector.NewQdrantClient()
-	client.VectorSize = 768
-
-	vec, err := embed.GetEmbedding(question)
-	if err != nil {
-		return "Ошибка: не могу понять вопрос", nil, map[string]float64{}
-	}
-	embedDuration := time.Since(startEmbed).Seconds()
-
-	vec32 := []float32{} // подготовка вектора
-	for _, v := range vec {
-		vec32 = append(vec32, float32(v))
-	}
-
-	startSearch := time.Now() // поиск в Qdrant
-	results, err := client.Search("documents", vec32, 10, userID)
-	if err != nil || len(results) == 0 {
-		return "Ничего не нашла", nil, map[string]float64{}
-	}
-	searchDuration := time.Since(startSearch).Seconds()
-
-	context := []string{}
-	sources := []map[string]interface{}{}
-	docNames := []string{}
-	pages := []int{} 
-
-	for _, r := range results {
-		payload := r["payload"].(map[string]interface{})
-		text := payload["chunk_text"].(string)
-		docName := payload["doc_id"].(string)
-
-		
-		page := 1  // достаю страницу из qdrant
-		if p, ok := payload["page"].(float64); ok && int(p) > 0 {
-			page = int(p)
-		}
-
-		context = append(context, text)
-		sources = append(sources, map[string]interface{}{
-			"doc_id": payload["doc_id"],
-			"score": r["score"],
-			"page": page,
-		})
-		docNames = append(docNames, docName)
-		pages = append(pages, page)
-	}
-
-	seen := map[string]bool{} // убираю дубликаты
-	unique := []map[string]interface{}{}
-	for _, s := range sources {
-		name := s["doc_id"].(string)
-		if !seen[name] {
-			seen[name] = true
-			unique = append(unique, s)
-		}
-	}
-
-	startLLM := time.Now()
-	answer, err := llm.GetAnswerWithHistory(question, context, docNames, pages, chatHistory[userID]) // передаю страницы
-	if err != nil {
-		fmt.Println("Ошибка LLM:", err)
-		return "Ошибка: нейросеть не отвечает", unique, map[string]float64{}
-	}
-	llmDuration := time.Since(startLLM).Seconds()
-
-	totalDuration := time.Since(startTotal).Seconds()
-
-	timings := map[string]float64{
-		"total": totalDuration,
-		"embed": embedDuration,
-		"search": searchDuration,
-		"llm": llmDuration,
-	}
-
-	return answer, unique, timings
 }
