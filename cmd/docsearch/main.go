@@ -85,6 +85,12 @@ func main() {
 
 
     if question != "" {    // если задан вопрос
+if userID==""{     // пользователь обяхателен для ask
+     fmt.Println("Ошибка: для поиска необходимо указать пользователя")
+        fmt.Println("Используйте: docsearch.exe ask \"вопрос\" --user Имя")
+        fmt.Println("Пример: docsearch.exe ask \"Что такое RAG?\" --user Валерия")
+        return
+}
         startTime := time.Now()
 
         results, docs, scores, answer, _, _ := rag.Ask(*cfg, question, userID)
