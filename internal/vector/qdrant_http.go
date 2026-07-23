@@ -7,6 +7,8 @@ import (
     "io"
     "net/http"
     "os"
+    "time"
+    "strconv"
 )
 
 type QdrantClient struct {
@@ -19,12 +21,17 @@ func NewQdrantClient() *QdrantClient {   // создаю нового клиен
    /* return &QdrantClient{Host: "localhost", Port: 6333}*/
 host := os.Getenv("QDRANT_HOST")
     if host == "" {
-        host = "localhost"
+        panic("QDRANT_HOST не задан в .env")
     }
     
-    port := 6333
-    if host != "localhost" {
-        port = 443 
+    portStr := os.Getenv("QDRANT_PORT")  //  порт из .env
+    if portStr != "" {
+        panic("QDRANT_PORT не задан в .env")
+    }
+
+    port, err := strconv.Atoi(portStr)
+    if err != nil || port <= 0 {
+        panic("QDRANT_PORT должен быть положительным числом")
     }
     
     return &QdrantClient{
@@ -42,41 +49,74 @@ func (q *QdrantClient) url(path string) string { //адрес
 }
 
 func (q *QdrantClient) Ping() error {
-    r, _ := http.Get(q.url("/collections"))
-    defer r.Body.Close()
-    if r.StatusCode != 200 {
-        return fmt.Errorf("ошибка %d", r.StatusCode)
+    cl := &http.Client{
+        Timeout: 10 * time.Second,
+    }
+    req, err := http.NewRequest("GET", q.url("/collections"), nil)
+    if err != nil {
+        return err
+    }
+
+    resp, err := cl.Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != 200 {
+        return fmt.Errorf("ошибка %d", resp.StatusCode)
     }
     return nil
 }
 
 func (q *QdrantClient) CreateCollection(name string) error {  // создаю коллекцию
-    r, _ := http.Get(q.url("/collections/" + name))
     
-    defer r.Body.Close()
-    if r.StatusCode == 200 {
+    cl := &http.Client{
+        Timeout: 10 * time.Second,
+    }
+    req, err := http.NewRequest("GET", q.url("/collections/" + name), nil)
+    if err != nil {
+        return err
+    }
+
+    resp, err := cl.Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode == 200 {
         return nil
     }
 
-    body:= []byte(`{"vectors":{"size":` + fmt.Sprint(q.VectorSize) + `,"distance":"Cosine"}}`)
-    req, _ := http.NewRequest("PUT", q.url("/collections/"+name), bytes.NewBuffer(body))
+    body := []byte(`{"vectors":{"size":` + fmt.Sprint(q.VectorSize) + `,"distance":"Cosine"}}`)
+    req, err = http.NewRequest("PUT", q.url("/collections/"+name), bytes.NewBuffer(body))
+    if err != nil {
+        return err
+    }
     req.Header.Set("Content-Type", "application/json")
 
-    cl:= &http.Client{}
-    r, _ = cl.Do(req)
-    defer r.Body.Close()
+    cl = &http.Client{
+        Timeout: 30 * time.Second,
+    }
+    resp, err = cl.Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
 
-    if r.StatusCode != 200 {
-        return fmt.Errorf("ошибка %d", r.StatusCode)
+    if resp.StatusCode != 200 {
+        return fmt.Errorf("ошибка %d", resp.StatusCode)
     }
     return nil
 }
 
 func (q *QdrantClient) Save(name string, id string, vec []float32, data map[string]interface{}) error {  // сохраняю один чанк в бд
-     fmt.Printf("Размер вектора: %d, ожидается: %d\n", len(vec), q.VectorSize)
-    if len(vec)!=q.VectorSize{
+    fmt.Printf("Размер вектора: %d, ожидается: %d\n", len(vec), q.VectorSize)
+    if len(vec) != q.VectorSize {
         return fmt.Errorf("Размер вектора %d, ожидается %d", len(vec), q.VectorSize)
     }
+    
     d := map[string]interface{}{
         "points": []map[string]interface{}{
             {"id": id, "vector": vec, "payload": data},
@@ -93,7 +133,9 @@ func (q *QdrantClient) Save(name string, id string, vec []float32, data map[stri
     }
     req.Header.Set("Content-Type", "application/json")
 
-    cl := &http.Client{}
+    cl := &http.Client{
+        Timeout: 30 * time.Second,
+    }
     r, err := cl.Do(req)
     if err != nil {
         return err
@@ -112,7 +154,7 @@ func (q *QdrantClient) Search(name string, vec []float32, limit int, userID stri
         "vector": vec,
         "limit": limit,
         "with_payload": true,
-        }
+    }
 
     if userID != "" {
         d["filter"] = map[string]interface{}{
@@ -131,7 +173,9 @@ func (q *QdrantClient) Search(name string, vec []float32, limit int, userID stri
     req, _ := http.NewRequest("POST", q.url("/collections/"+name+"/points/search"), bytes.NewBuffer(j))
     req.Header.Set("Content-Type", "application/json")
 
-    cl := &http.Client{}
+    cl := &http.Client{
+        Timeout: 60 * time.Second,
+    }
     r, _ := cl.Do(req)
     defer r.Body.Close()
 
@@ -171,7 +215,9 @@ func (q *QdrantClient) Delete(name string, filter map[string]interface{}) error 
     }
     req.Header.Set("Content-Type", "application/json")
 
-    cl := &http.Client{}
+    cl := &http.Client{
+        Timeout: 30 * time.Second,
+    }
     r, err := cl.Do(req)
     if err != nil {
         return err
