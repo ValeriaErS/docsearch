@@ -1,6 +1,7 @@
 package llm
 
 import (
+    "time"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,10 @@ import (
 	"regexp"
 	"strings"
 	"github.com/joho/godotenv"
+)
+const (
+    llmTimeout = 100 * time.Second  // ждем ответ 30 секунд
+    maxRetries = 2               
 )
 
 func init() {
@@ -105,62 +110,77 @@ func GetAnswerWithHistory(question string, chunks []string, docNames []string, p
     req.Header.Set("HTTP-Referer", "http://localhost")
     req.Header.Set("X-Title", "docsearch")
 
-    client := &http.Client{}
-    resp, err := client.Do(req)
-    if err != nil {
-        return "", err
+var lastErr error
+    for attempt := 0; attempt < maxRetries; attempt++ {
+        if attempt > 0 {
+            fmt.Printf("Повторная попытка %d из %d\n", attempt+1, maxRetries)
+            time.Sleep(time.Duration(attempt) * time.Second)
+        }
+
+        client := &http.Client{Timeout: llmTimeout}
+        resp, err := client.Do(req)
+        if err != nil {
+            lastErr = err
+            continue
+        }
+        defer resp.Body.Close()
+
+        body, err := io.ReadAll(resp.Body)
+        if err != nil {
+            lastErr = err
+            continue
+        }
+
+        if resp.StatusCode != 200 {
+            lastErr = fmt.Errorf("ошибка %d: %s", resp.StatusCode, string(body))
+            continue
+        }
+
+        
+        var result struct {
+            Choices []struct {
+                Message struct {
+                    Content string `json:"content"`
+                } `json:"message"`
+            } `json:"choices"`
+        }
+
+        err = json.Unmarshal(body, &result)
+        if err != nil {
+            lastErr = err
+            continue
+        }
+
+        if len(result.Choices) == 0 {
+            lastErr = fmt.Errorf("нет ответа от модели")
+            continue
+        }
+
+        answer := result.Choices[0].Message.Content
+
+       
+        answer = strings.ReplaceAll(answer, "**", "")
+        answer = strings.ReplaceAll(answer, "*", "")
+        answer = strings.ReplaceAll(answer, "###", "")
+        answer = strings.ReplaceAll(answer, "##", "")
+        answer = strings.ReplaceAll(answer, "#", "")
+
+        
+        answer = strings.ReplaceAll(answer, "[]", "")
+        answer = strings.ReplaceAll(answer, "[ ]", "")
+        answer = strings.ReplaceAll(answer, "()", "")
+
+        re := regexp.MustCompile(`\n{3,}`)
+        answer = re.ReplaceAllString(answer, "\n\n")
+
+        answer = strings.TrimSpace(answer)
+
+        return answer, nil
     }
-    defer resp.Body.Close()
 
-    body, err := io.ReadAll(resp.Body)
-    if err != nil {
-        return "", err
-    }
-
-    if resp.StatusCode != 200 {
-        return "", fmt.Errorf("ошибка %d: %s", resp.StatusCode, string(body))
-    }
-
-    var result struct {
-        Choices []struct {
-            Message struct {
-                Content string `json:"content"`
-            } `json:"message"`
-        } `json:"choices"`
-    }
-
-    err = json.Unmarshal(body, &result)
-    if err != nil {
-        return "", err
-    }
-
-    if len(result.Choices) == 0 {
-        return "", fmt.Errorf("нет ответа от модели")
-    }
-
-    answer := result.Choices[0].Message.Content
-
-   
-    answer = strings.ReplaceAll(answer, "**", "")
-    answer = strings.ReplaceAll(answer, "*", "")
-    answer = strings.ReplaceAll(answer, "###", "")
-    answer = strings.ReplaceAll(answer, "##", "")
-    answer = strings.ReplaceAll(answer, "#", "")
-
-   
-    answer = strings.ReplaceAll(answer, "[]", "")
-    answer = strings.ReplaceAll(answer, "[ ]", "")
-    answer = strings.ReplaceAll(answer, "()", "")
-
-    
-    re := regexp.MustCompile(`\n{3,}`)
-    answer = re.ReplaceAllString(answer, "\n\n")
-
-    answer = strings.TrimSpace(answer)
-
-    return answer, nil
+    return "", fmt.Errorf("не удалось получить ответ после %d попыток: %w", maxRetries, lastErr)
 }
 
 func GetAnswer(question string, chunks []string) (string, error) {
-	return GetAnswerWithHistory(question, chunks, []string{}, []int{}, []map[string]string{})
+    return GetAnswerWithHistory(question, chunks, []string{}, []int{}, []map[string]string{})
 }

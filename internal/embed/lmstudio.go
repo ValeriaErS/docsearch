@@ -5,6 +5,8 @@ import (
     "encoding/json"
     "net/http"
     "docsearch/internal/config"
+    "time"
+    "fmt"
 )
 
 func GetEmbedding(text string, cfg *config.Config) ([]float64, error) { //отправка текста в LM с возвратом эмбеддинга
@@ -20,12 +22,25 @@ func GetEmbedding(text string, cfg *config.Config) ([]float64, error) { //отп
     if err != nil {
         return nil, err
     }
+    client:=&http.Client{ //таймаут
+        Timeout:120 * time.Second,
+    }
 
-    resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData)) // отправка post
+     req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData)) // отправка post
+    if err != nil {
+        return nil, err
+    }
+    req.Header.Set("Content-Type", "application/json")
+    resp, err := client.Do(req)
+
     if err != nil {
         return nil, err
     }
     defer resp.Body.Close()
+
+    if resp.StatusCode != 200 {
+        return nil, fmt.Errorf("ошибка LM Studio: статус %d", resp.StatusCode)
+    }
 
     var result struct {
         Data []struct {
