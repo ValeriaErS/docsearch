@@ -82,6 +82,8 @@ func (q *QdrantClient) CreateCollection(name string) error {  // создаю к
         if resp.StatusCode == 200 {
             return nil // коллекция уже существует
         }
+    } else {
+    fmt.Printf("Коллекция не найдена, создаем новую: %v\n", err)
     }
 
     body := []byte(`{"vectors":{"size":` + fmt.Sprint(q.VectorSize) + `,"distance":"Cosine"}}`)  // коллекция с retry

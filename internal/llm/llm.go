@@ -29,7 +29,7 @@ func GetAnswerWithHistory(ctx context.Context, question string, chunks []string,
         return "", fmt.Errorf("нет ключа")
     }
 
-    url := "https://openrouter.ai/api/v1/chat/completions"
+    url := cfg.LLM.BaseURL + "/chat/completions"
 
     
     context := ""          // склеиваю чанки с указанием источника и страницы
