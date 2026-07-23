@@ -124,7 +124,7 @@ func (i *Indexer) saveDoc(doc corpus.Document) error {
 		}
 		fmt.Printf("Чанк %d: страница %d\n", idx+1, page)
 
-		vec, err := embed.GetEmbedding(ch.Text) // получаю эмбеддинг
+		vec, err := embed.GetEmbedding(ch.Text, i.Config) // получаю эмбеддинг
 		if err != nil {
 			fmt.Println("Ошибка эмбеддинга:", err)
 			return err

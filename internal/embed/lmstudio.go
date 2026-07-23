@@ -4,14 +4,16 @@ import (
     "bytes"
     "encoding/json"
     "net/http"
+    "docsearch/internal/config"
 )
 
-func GetEmbedding(text string) ([]float64, error) { //отправка текста в LM с возвратом эмбеддинга
-    url := "http://127.0.0.1:1234/v1/embeddings"
+func GetEmbedding(text string, cfg *config.Config) ([]float64, error) { //отправка текста в LM с возвратом эмбеддинга
+    url := cfg.Embeddings.BaseURL + "/v1/embeddings"
+    model := cfg.Embeddings.Model
 
     data := map[string]interface{}{  //запрос
         "input": []string{text},
-        "model": "text-embedding-nomic-embed-text-v1.5",
+        "model": model,
     }
 
     jsonData, err := json.Marshal(data)
