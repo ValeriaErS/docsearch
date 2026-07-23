@@ -51,6 +51,16 @@ func Ask(cfg config.Config, question string, userID string) ([]string, []string,
     if !found {
         return []string{}, []string{}, []float64{}, "ничего не нашла (ниже порога)", []int{}, map[string]float64{}
     }
+    filteredResults:=[]map[string]interface{}{}  //фильтрую чанки ниже порога
+    for _,r:=range results{
+        if r["score"].(float64)>=cfg.Retrieval.MinScore{
+            filteredResults=append(filteredResults,r)
+        }
+    }
+    if len(filteredResults)==0{
+        return []string{},[]string{}, []float64{}, "В документации нет информации по этому вопросу", []int{}, map[string]float64{}
+    }
+    results=filteredResults
 
    
     texts := []string{}
