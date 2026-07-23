@@ -22,11 +22,11 @@ type EvalResult struct {
 }
 
 func runEval(cfg *config.Config) {
-    fmt.Println("\n Запуск")
+    fmt.Println("Запуск")
 
     if cfg.LLM.Provider == "mock" {
         fmt.Println("Внимание: eval запущен в mock-режиме")
-        fmt.Println(" Результаты могут не отражать реальное качество поиска\n")
+        fmt.Println("Результаты могут не отражать реальное качество поиска")
     }
 
     userForEval := ""  // определяю пользователя
@@ -70,7 +70,7 @@ func runEval(cfg *config.Config) {
     for i, q := range questions {
         fmt.Printf("--- Вопрос %d: \"%s\" ---\n", i+1, q.Query)
 
-        texts, docs, _, _, _, _ := rag.Ask(*cfg, q.Query, userForEval)
+        texts, docs, _, _, _, _ := rag.Ask(*cfg, q.Query, userForEval, []map[string]string{})
 
         fmt.Printf("Ожидаемые документы: %v\n", q.ExpectedDocs)
         fmt.Printf("Найденные документы: %v\n", docs)

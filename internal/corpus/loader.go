@@ -33,41 +33,51 @@ func readPDF(path string) (string, map[int]string, error){   // читаю PDF �
 	return fullText.String(), pages, nil
 }
 
-func LoadDocuments(path string)([]Document,error) { //читаем док,возврат списка
-	files,err:=os.ReadDir(path)
-	if err!=nil{
-		return nil,err
+
+func LoadDocuments(path string, formats []string) ([]Document, error) { //formats как параметр
+    files, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
 	}
-	var docs []Document  //Пустой список 
 	
-	for _,file:=range files {
-		if file.IsDir () { 
+	validExts := make(map[string]bool)   // map для быстрой проверки
+    for _, f := range formats {
+        validExts["."+f] = true
+    }
+    var docs []Document
+	for _, file := range files {
+		if file.IsDir() {
 			continue
 		}
-	name:=file.Name()
-	ext:=filepath.Ext(name)
+		name := file.Name()
+		ext := filepath.Ext(name)
+		
+		if !validExts[ext] {  // расширение по списку из конфига
+			continue 
+		}
 
-	if ext!=".md" && ext!=".txt" && ext!=".pdf"{
-		continue
-	}
 fullPath:=filepath.Join(path,name)
 var text string
 var pages map[int]string
 
 if ext==".pdf"{
 	text, pages, err = readPDF(fullPath) 
+	if err != nil {
+				fmt.Printf("Ошибка чтения PDF %s: %v\n", name, err)
+				continue
+			}
 	fmt.Printf("Документ %s: %d страниц\n", name, len(pages))  
 }else {
 	data,err:=os.ReadFile(fullPath)
 	if err!=nil{
-		return nil,err
-	}
+		fmt.Printf("Ошибка чтения файла %s: %v\n", name, err)
+				continue
+			}
+
 	text=string(data)
 	pages = nil
 }
-if err!=nil{
-	return nil,err
-}
+
 doc:=Document{  // создаю документ и нормализую текст
 	Name:name,
 	Text:NormalizeNext(text),

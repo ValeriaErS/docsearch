@@ -87,60 +87,102 @@ type IntelligentChunk struct {  // один чанк
 	Level int
 	Index int
 	TokenCount int 
+	Page int
+	OverlapFrom int
 }
-func SplitIntelligent(text string, docName string, maxTokens int)[]IntelligentChunk{ //режу
-	enc,_:=tiktoken.GetEncoding ("cl100k_base")
-	var chunks []IntelligentChunk
+func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens int) []IntelligentChunk {
+    enc, _ := tiktoken.GetEncoding("cl100k_base")
+    var chunks []IntelligentChunk
 
-	sections:=parseSections(text)
-	chunkIndex:=0
+    sections := parseSections(text)
+    chunkIndex := 0
 
-	for _, section:=range sections{
-		sentences:=strings.Split(section.Content, ". ")
+    for _, section := range sections {
+        sentences := strings.Split(section.Content, ". ")
 
-		var current string
-		currentTokens:=0
+        var current string
+        var overlapBuffer string
+        currentTokens := 0
+        overlapTokensCount := 0
 
-		for i:=0;i<len(sentences);i++{
-			s:=sentences[i]
-			if i<len(sentences)-1{
-				s=s+"."
-			}
-		tokenCount:=len(enc.Encode(s,nil,nil))
-		if currentTokens+tokenCount<=maxTokens{
-			if current!=""{
-				current=current+" "+s
-			} else {
-				current=s
-			}
-			currentTokens=currentTokens+tokenCount
-		} else {
-			if current!=""{
-				chunks=append(chunks,IntelligentChunk{
-			    Text:current,
-				Document:docName,
-				Section:section.Title,
-				Level: section.Level,
-				Index:chunkIndex,
-				TokenCount:currentTokens,
-				})
-	            chunkIndex++
-		}
-		current=s
-		currentTokens=tokenCount
-		}
-	}
-	if current!=""{     // сохраняю последний чанк в разделе
-		chunks=append(chunks, IntelligentChunk{
-			Text:current,
-			Document:docName,
-			Section:section.Title,
-			Level:section.Level,
-			Index:chunkIndex,
-			TokenCount:currentTokens,
-		})
-		chunkIndex++
-	}
-}
-return chunks
+        for i := 0; i < len(sentences); i++ {
+            s := sentences[i]
+            if i < len(sentences)-1 {
+                s = s + "."
+            }
+            tokenCount := len(enc.Encode(s, nil, nil))
+
+
+            if currentTokens+tokenCount <= maxTokens {   // влезет ли предложение в текущий чанк
+                if current != "" {
+                    current = current + " " + s
+                } else {
+                    current = s
+                }
+                currentTokens = currentTokens + tokenCount
+            } else {
+                
+                if current != "" {
+                    chunks = append(chunks, IntelligentChunk{
+                        Text: current,
+                        Document:docName,
+                        Section: section.Title,
+                        Level: section.Level,
+                        Index: chunkIndex,
+                        TokenCount: currentTokens,
+                        OverlapFrom: -1,  //нет перекрытия
+                    })
+                    chunkIndex++
+                }
+
+                if overlapTokens > 0 && current != "" {
+                    
+                    prevSentences := strings.Split(current, ". ")
+                    overlapBuffer = ""
+                    overlapTokensCount = 0
+                    
+        
+                    for j := len(prevSentences) - 1; j >= 0; j-- {  //с конца собираю
+                        s2 := prevSentences[j]
+                        if j < len(prevSentences)-1 {
+                            s2 = s2 + "."
+                        }
+                        tCount := len(enc.Encode(s2, nil, nil))
+                        if overlapTokensCount+tCount <= overlapTokens {
+                            if overlapBuffer != "" {
+                                overlapBuffer = s2 + ". " + overlapBuffer
+                            } else {
+                                overlapBuffer = s2
+                            }
+                            overlapTokensCount = overlapTokensCount + tCount
+                        } else {
+                            break
+                        }
+                    }
+                }
+
+                current = overlapBuffer  //новый чанк с перекрытием
+                if current != "" {
+                    current = current + " " + s
+                } else {
+                    current = s
+                }
+                currentTokens = overlapTokensCount + tokenCount
+            }
+        }
+
+        if current != "" {
+            chunks = append(chunks, IntelligentChunk{
+                Text: current,
+                Document:docName,
+                Section: section.Title,
+                Level: section.Level,
+                Index: chunkIndex,
+                TokenCount: currentTokens,
+                OverlapFrom: -1,
+            })
+            chunkIndex++
+        }
+    }
+    return chunks
 }

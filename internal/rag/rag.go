@@ -7,16 +7,17 @@ import (
     "docsearch/internal/embed"
     "docsearch/internal/llm"
     "docsearch/internal/vector"
+    "context"
 )
 
-func Ask(cfg config.Config, question string, userID string) ([]string, []string, []float64, string, []int, map[string]float64) {
+func Ask(cfg config.Config, question string, userID string, history []map[string]string) ([]string, []string, []float64, string, []int, map[string]float64) {
     startTotal := time.Now()
 
     fmt.Println("Провайдер LLM:", cfg.LLM.Provider)
 
     
     startEmbed := time.Now() //эмбеддинг
-    vec, err := embed.GetEmbedding(question, &cfg)
+    vec, err := embed.GetEmbedding(context.Background(), question, &cfg)
     if err != nil {
         return []string{}, []string{}, []float64{}, "не могу понять ваш вопрос", []int{}, map[string]float64{}
     }
@@ -96,7 +97,7 @@ func Ask(cfg config.Config, question string, userID string) ([]string, []string,
         llmDuration = 0
     } else {
         startLLM := time.Now()
-        answer, err = llm.GetAnswerWithHistory(question, texts, docs, pages, []map[string]string{})
+       answer, err = llm.GetAnswerWithHistory(context.Background(), question, texts, docs, pages, history, &cfg)
         if err != nil {
             return texts, docs, scores, "LLM не отвечает", pages, map[string]float64{}
         }

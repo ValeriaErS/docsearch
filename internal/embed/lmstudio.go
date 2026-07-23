@@ -7,9 +7,10 @@ import (
     "docsearch/internal/config"
     "time"
     "fmt"
+    "context"
 )
 
-func GetEmbedding(text string, cfg *config.Config) ([]float64, error) { //отправка текста в LM с возвратом эмбеддинга
+func GetEmbedding(ctx context.Context, text string, cfg *config.Config) ([]float64, error) { //отправка текста в LM с возвратом эмбеддинга
     url := cfg.Embeddings.BaseURL + "/v1/embeddings"
     model := cfg.Embeddings.Model
 
@@ -26,7 +27,7 @@ func GetEmbedding(text string, cfg *config.Config) ([]float64, error) { //отп
         Timeout:120 * time.Second,
     }
 
-     req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData)) // отправка post
+     req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData)) // отправка post
     if err != nil {
         return nil, err
     }

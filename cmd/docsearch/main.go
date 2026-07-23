@@ -93,7 +93,7 @@ if userID==""{     // пользователь обяхателен для ask
 }
         startTime := time.Now()
 
-        results, docs, scores, answer, _, _ := rag.Ask(*cfg, question, userID)
+        results, docs, scores, answer, _, _ := rag.Ask(*cfg, question, userID, []map[string]string{})
 
         found := false     // проверяю порог
         for i := 0; i < len(scores); i++ {
@@ -143,7 +143,7 @@ if userID==""{     // пользователь обяхателен для ask
             Answer:answer,
             Sources:sources,
             Model:cfg.LLM.Model,
-            TokensUsed:512,
+            TokensUsed: cfg.LLM.MaxTokens,
             DurationMs:duration,
         }
 

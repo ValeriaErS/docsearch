@@ -23,7 +23,8 @@ func TestReadPDF(t *testing.T) {            // проверяю, что PDF чи
     }
 }
 func TestLoadPDF(t *testing.T) {         // проверяю, что PDF загружается через LoadDocuments
-    docs, err:= LoadDocuments("docs")
+    formats := []string{"md", "txt", "pdf"}
+    docs, err := LoadDocuments("docs", formats)
 
     if err != nil {                     
         t.Skip("Ошибка загрузки")

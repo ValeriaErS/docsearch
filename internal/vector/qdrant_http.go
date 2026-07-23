@@ -25,7 +25,7 @@ host := os.Getenv("QDRANT_HOST")
     }
     
     portStr := os.Getenv("QDRANT_PORT")  //  порт из .env
-    if portStr != "" {
+    if portStr == "" {
         panic("QDRANT_PORT не задан в .env")
     }
 
@@ -71,42 +71,34 @@ func (q *QdrantClient) Ping() error {
 
 func (q *QdrantClient) CreateCollection(name string) error {  // создаю коллекцию
     
-    cl := &http.Client{
-        Timeout: 10 * time.Second,
-    }
     req, err := http.NewRequest("GET", q.url("/collections/" + name), nil)
     if err != nil {
         return err
     }
 
-    resp, err := cl.Do(req)
-    if err != nil {
-        return err
-    }
-    defer resp.Body.Close()
-
-    if resp.StatusCode == 200 {
-        return nil
+    resp, err := retryRequest(req, 2)
+    if err == nil {
+        defer resp.Body.Close()
+        if resp.StatusCode == 200 {
+            return nil // коллекция уже существует
+        }
     }
 
-    body := []byte(`{"vectors":{"size":` + fmt.Sprint(q.VectorSize) + `,"distance":"Cosine"}}`)
+    body := []byte(`{"vectors":{"size":` + fmt.Sprint(q.VectorSize) + `,"distance":"Cosine"}}`)  // коллекция с retry
     req, err = http.NewRequest("PUT", q.url("/collections/"+name), bytes.NewBuffer(body))
     if err != nil {
-        return err
+         return fmt.Errorf("ошибка создания запроса: %w", err)
     }
     req.Header.Set("Content-Type", "application/json")
 
-    cl = &http.Client{
-        Timeout: 30 * time.Second,
-    }
-    resp, err = cl.Do(req)
+    resp, err = retryRequest(req, 3)
     if err != nil {
-        return err
+        return fmt.Errorf("ошибка создания коллекции: %w", err)
     }
     defer resp.Body.Close()
 
     if resp.StatusCode != 200 {
-        return fmt.Errorf("ошибка %d", resp.StatusCode)
+        return fmt.Errorf("ошибка создания коллекции: статус %d", resp.StatusCode)
     }
     return nil
 }
@@ -124,25 +116,22 @@ func (q *QdrantClient) Save(name string, id string, vec []float32, data map[stri
     }
     j, err := json.Marshal(d)
     if err != nil {
-        return err
+         return fmt.Errorf("ошибка маршалинга: %w", err)
     }
 
     req, err := http.NewRequest("PUT", q.url("/collections/"+name+"/points"), bytes.NewBuffer(j))
     if err != nil {
-        return err
+        return fmt.Errorf("ошибка создания запроса: %w", err)
     }
     req.Header.Set("Content-Type", "application/json")
 
-    cl := &http.Client{
-        Timeout: 30 * time.Second,
-    }
-    r, err := cl.Do(req)
+    r, err := retryRequest(req, 3)
     if err != nil {
-        return err
+        return fmt.Errorf("ошибка сохранения: %w", err)
     }
     defer r.Body.Close()
 
-    body, _ := io.ReadAll(r.Body)    // читаем тело ответа из-за ошибок
+    body, _ := io.ReadAll(r.Body)
     if r.StatusCode != 200 {
         return fmt.Errorf("ошибка %d: %s", r.StatusCode, string(body))
     }
@@ -156,37 +145,47 @@ func (q *QdrantClient) Search(name string, vec []float32, limit int, userID stri
         "with_payload": true,
     }
 
-    if userID != "" {
-        d["filter"] = map[string]interface{}{
-            "must": []map[string]interface{}{
-                {
-                    "key": "user_id",
-                    "match": map[string]interface{}{
-                        "value": userID,
-                    },
-                },
-            },
-        }
+    filterUserID := userID
+    if filterUserID == "" {
+    filterUserID = "default"
     }
-    j, _ := json.Marshal(d)
+       d["filter"] = map[string]interface{}{
+       "must": []map[string]interface{}{
+        {
+            "key": "user_id",
+            "match": map[string]interface{}{
+            "value": filterUserID,
+            },
+        },
+    },
+}
+    j, err := json.Marshal(d)
+    if err != nil {
+        return nil, fmt.Errorf("ошибка маршалинга запроса: %w", err)
+    }
 
-    req, _ := http.NewRequest("POST", q.url("/collections/"+name+"/points/search"), bytes.NewBuffer(j))
+    req, err := http.NewRequest("POST", q.url("/collections/"+name+"/points/search"), bytes.NewBuffer(j))
+    if err != nil {
+        return nil, fmt.Errorf("ошибка создания запроса: %w", err)
+    }
     req.Header.Set("Content-Type", "application/json")
 
-    cl := &http.Client{
-        Timeout: 60 * time.Second,
+     r, err := retryRequest(req, 3)
+    if err != nil {
+        return nil, fmt.Errorf("ошибка запроса к Qdrant: %w", err)
     }
-    r, _ := cl.Do(req)
     defer r.Body.Close()
 
-    var res struct {    // читаю ответ
+    var res struct {
         Result []struct {
-            Id string `json:"id"`
-            Score float64 `json:"score"`
-            Payload map[string]interface{} `json:"payload"`
+        Id string `json:"id"`
+        Score float64 `json:"score"`
+        Payload map[string]interface{} `json:"payload"`
         } `json:"result"`
     }
-    json.NewDecoder(r.Body).Decode(&res)
+    if err := json.NewDecoder(r.Body).Decode(&res); err != nil {
+        return nil, fmt.Errorf("ошибка парсинга ответа Qdrant: %w", err)
+    }
 
     out := []map[string]interface{}{}
     for _, item := range res.Result {
@@ -206,26 +205,48 @@ func (q *QdrantClient) Delete(name string, filter map[string]interface{}) error 
 
     jsonData, err := json.Marshal(data)
     if err != nil {
-        return err
+        return fmt.Errorf("ошибка маршалинга: %w", err)
     }
 
     req, err := http.NewRequest("POST", q.url("/collections/"+name+"/points/delete"), bytes.NewBuffer(jsonData))
     if err != nil {
-        return err
+        return fmt.Errorf("ошибка создания запроса: %w", err)
     }
     req.Header.Set("Content-Type", "application/json")
 
-    cl := &http.Client{
-        Timeout: 30 * time.Second,
-    }
-    r, err := cl.Do(req)
+    r, err := retryRequest(req, 3)
     if err != nil {
-        return err
+        return fmt.Errorf("ошибка удаления: %w", err)
     }
     defer r.Body.Close()
 
     if r.StatusCode != 200 {
-        return fmt.Errorf("ошибка удаления: %d", r.StatusCode)
+        return fmt.Errorf("ошибка удаления: статус %d", r.StatusCode)
     }
     return nil
+}
+
+func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) {  //повторные попытки
+    client := &http.Client{
+        Timeout: 60 * time.Second,
+    }
+    
+    var lastErr error
+    for attempt := 0; attempt < maxRetries; attempt++ {
+        if attempt > 0 {
+            time.Sleep(time.Duration(attempt) * time.Second) 
+        }
+        
+        resp, err := client.Do(req)
+        if err == nil && resp.StatusCode == 200 {
+            return resp, nil
+        }
+        if err != nil {
+            lastErr = err
+        } else if resp.StatusCode != 200 {
+            resp.Body.Close()
+            lastErr = fmt.Errorf("статус %d", resp.StatusCode)
+        }
+    }
+    return nil, fmt.Errorf("не удалось выполнить запрос после %d попыток: %w", maxRetries, lastErr)
 }

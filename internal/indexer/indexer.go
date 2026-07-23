@@ -12,8 +12,8 @@ import (
 	"docsearch/internal/corpus"
 	"docsearch/internal/embed"
 	"docsearch/internal/vector"
-
 	"github.com/google/uuid"
+	"context"
 )
 
 type Indexer struct { //структура индексации
@@ -27,7 +27,7 @@ func NewIndexer(cfg *config.Config, vc *vector.QdrantClient, userID string) *Ind
 	return &Indexer{
 		Config: cfg,
 		VectorClient: vc,
-		IndexPath: "./.docsearch_index.json",
+		IndexPath: "./.docsearch_index_" + userID + ".json",
 		UserID: userID,
 	}
 }
@@ -47,7 +47,7 @@ func (i *Indexer) Index() error {
 		return nil
 	}
 
-	docs, err := corpus.LoadDocuments(userDocsPath) // загружаю документы из папки
+	docs, err := corpus.LoadDocuments(userDocsPath, i.Config.Corpus.Formats) // загружаю документы из папки
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func (i *Indexer) Index() error {
 }
 
 func (i *Indexer) saveDoc(doc corpus.Document) error {
-	chunks := chunk.SplitIntelligent(doc.Text, doc.Name, i.Config.Chunking.MaxTokens) // режу на чанки
+	chunks := chunk.SplitIntelligent(doc.Text, doc.Name, i.Config.Chunking.MaxTokens, i.Config.Chunking.OverlapTokens) // режу на чанки
 
 	fmt.Printf("Документ: %s, страниц: %d\n", doc.Name, len(doc.Pages))
 
@@ -124,7 +124,7 @@ func (i *Indexer) saveDoc(doc corpus.Document) error {
 		}
 		fmt.Printf("Чанк %d: страница %d\n", idx+1, page)
 
-		vec, err := embed.GetEmbedding(ch.Text, i.Config) // получаю эмбеддинг
+		vec, err := embed.GetEmbedding(context.Background(), ch.Text, i.Config) // получаю эмбеддинг
 		if err != nil {
 			fmt.Println("Ошибка эмбеддинга:", err)
 			return err

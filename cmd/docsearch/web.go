@@ -27,9 +27,11 @@ func makeSafeUserDir(username string) (string, error) {  //безопасен л
     fullPath := filepath.Join("docs", safeName)
 
     cleanPath := filepath.Clean(fullPath)
-    if !strings.HasPrefix(cleanPath, "docs/") {
-        return "", fmt.Errorf("небезопасное имя пользователя")
-    }
+    
+	docsPrefix := filepath.Join("docs", "") + string(os.PathSeparator)
+if !strings.HasPrefix(cleanPath, docsPrefix) {
+    return "", fmt.Errorf("небезопасное имя пользователя")
+}
     
     return cleanPath, nil
 }
@@ -230,7 +232,11 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 })
 chatMutex.Unlock()
 
-	texts, docs, scores, answer, pages, timings := rag.Ask(*globalCfg, req.Query, userID)
+chatMutex.RLock()
+history := chatHistory[userID]
+chatMutex.RUnlock()
+
+texts, docs, scores, answer, pages, timings := rag.Ask(*globalCfg, req.Query, userID, history)
 
 	sources := []map[string]interface{}{}
 	for i := 0; i < len(texts); i++ {

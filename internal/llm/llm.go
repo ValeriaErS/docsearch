@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"github.com/joho/godotenv"
+    "docsearch/internal/config"
+    "context"
 )
 const (
     llmTimeout = 100 * time.Second  // ждем ответ 30 секунд
@@ -21,7 +23,7 @@ func init() {
 	godotenv.Load() // ключик из env
 }
 
-func GetAnswerWithHistory(question string, chunks []string, docNames []string, pages []int, history []map[string]string) (string, error) {
+func GetAnswerWithHistory(ctx context.Context, question string, chunks []string, docNames []string, pages []int, history []map[string]string, cfg *config.Config) (string, error) {
     apiKey := os.Getenv("LLM_API_KEY")
     if apiKey == "" {
         return "", fmt.Errorf("нет ключа")
@@ -89,10 +91,10 @@ func GetAnswerWithHistory(question string, chunks []string, docNames []string, p
     }
 
     data := map[string]interface{}{
-        "model": "openrouter/free",
+        "model": cfg.LLM.Model,
         "messages": messages,
-        "temperature": 0.1,
-        "max_tokens": 1024,
+        "temperature":cfg.LLM.Temperature,
+        "max_tokens": cfg.LLM.MaxTokens,
     }
 
     jsonData, err := json.Marshal(data)
@@ -100,7 +102,7 @@ func GetAnswerWithHistory(question string, chunks []string, docNames []string, p
         return "", err
     }
 
-    req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+     req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
     if err != nil {
         return "", err
     }
@@ -181,6 +183,6 @@ var lastErr error
     return "", fmt.Errorf("не удалось получить ответ после %d попыток: %w", maxRetries, lastErr)
 }
 
-func GetAnswer(question string, chunks []string) (string, error) {
-    return GetAnswerWithHistory(question, chunks, []string{}, []int{}, []map[string]string{})
+func GetAnswer(ctx context.Context, question string, chunks []string, cfg *config.Config) (string, error) {
+    return GetAnswerWithHistory(ctx, question, chunks, []string{}, []int{}, []map[string]string{}, cfg)
 }
