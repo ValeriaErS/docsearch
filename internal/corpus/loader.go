@@ -89,18 +89,3 @@ docs=append(docs,doc)
 return docs,nil
 }
 
-/*package loader 
-func LoadDocuments(path string)([]Document,error)//загрузка документов
-return nil,nil
-}*/
-/*
-func LoadDocuments(path string) ([]string, error) {
-    files, _ := os.ReadDir(path)
-    var texts []string
-    for _, f := range files {
-        data, _ := os.ReadFile(f.Name())
-        texts = append(texts, string(data))
-    }
-    return texts, nil
-}
-*/

@@ -6,6 +6,8 @@ import (
     "os"
     "docsearch/internal/config"
     "docsearch/internal/rag"
+    "context"
+    
 )
 
 type EvalQuestion struct {
@@ -70,11 +72,30 @@ func runEval(cfg *config.Config) {
     for i, q := range questions {
         fmt.Printf("--- Вопрос %d: \"%s\" ---\n", i+1, q.Query)
 
-        texts, docs, _, _, _, _ := rag.Ask(*cfg, q.Query, userForEval, []map[string]string{})
-
+       texts, docs, scores, answer, pages, _ := rag.Ask(context.Background(), *cfg, q.Query, userForEval, []map[string]string{})
         fmt.Printf("Ожидаемые документы: %v\n", q.ExpectedDocs)
         fmt.Printf("Найденные документы: %v\n", docs)
         fmt.Printf("Найдено текстов: %d\n", len(texts))
+        fmt.Printf("Страницы: %v\n", pages)
+
+        if len(docs) > 0 {
+            fmt.Println("Источники:")
+            for i, doc := range docs {
+                page := 1
+                if i < len(pages) && pages[i] > 0 {
+                    page = pages[i]
+        }
+        fmt.Printf("%d. %s (страница %d, оценка: %.2f)\n", i+1, doc, page, scores[i])
+    }
+}
+
+        metrics:=rag.CountCitations(answer) //считаю ссылки в ответе
+        if metrics.TotalCitations>0{
+            fmt.Printf("Ссылок в ответе: %d\n", metrics.TotalCitations)
+            fmt.Printf("Уникальных источников: %d\n", metrics.UniqueSources)
+        } else {
+            fmt.Println("Ссылок в ответе нет")
+        }
 
         found := 0
         for _, expected := range q.ExpectedDocs {
@@ -98,7 +119,7 @@ func runEval(cfg *config.Config) {
         }
         results = append(results, result)
 
-        fmt.Printf("  Recall: %.0f%%\n", recall*100)
+        fmt.Printf("Recall: %.0f%%\n", recall*100)
         if result.Success {
             fmt.Println("успешно")
         } else {

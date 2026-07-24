@@ -66,37 +66,3 @@ func similarity(a []float64, b []float64) float64 {  // считает коси�
 
     return dot / (lenA * lenB)
 }
-
-/*func Search(texts []string, vectors [][]float64, query []float64) []string {
-    var result []string
-    for i := 0; i < len(vectors); i++ {
-        sim := similarity(query, vectors[i])
-        if sim > 0.5 {
-            result = append(result, texts[i])
-        }
-    }
-    return result
-}
-*/
-/*func Search(texts []string, vectors [][]float64, query []float64, TopK int) []string {
-    scores := []float64{}
-    for i := 0; i < len(vectors); i++ {
-        scores = append(scores, similarity(query, vectors[i]))
-    }
-
-    for i := 0; i < len(scores); i++ {
-        for j := i + 1; j < len(scores); j++ {
-            if scores[i] < scores[j] {
-                scores[i], scores[j] = scores[j], scores[i]
-                texts[i], texts[j] = texts[j], texts[i]
-            }
-        }
-    }
-
-    result := []string{}
-    for i := 0; i < TopK && i < len(texts); i++ {
-        result = append(result, texts[i])
-    }
-    return result
-}
-*/

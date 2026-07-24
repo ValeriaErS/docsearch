@@ -6,36 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"docsearch/internal/auth"
 	"docsearch/internal/config"
 	"docsearch/internal/db"
 	"docsearch/internal/rag"
 	"path/filepath"
+	"docsearch/internal/safety"
 )
-func sanitizeUsername(username string) string{
-	re:=regexp.MustCompile(`[^a-zA-Zа-яА-Я0-9_ ]`)
-	return re.ReplaceAllString(username,"")
-}
-func makeSafeUserDir(username string) (string, error) {  //безопасен ли путь
-    safeName := sanitizeUsername(username)
-    if safeName == "" {
-        return "", fmt.Errorf("пустое имя")
-    }
-
-    fullPath := filepath.Join("docs", safeName)
-
-    cleanPath := filepath.Clean(fullPath)
-    
-	docsPrefix := filepath.Join("docs", "") + string(os.PathSeparator)
-if !strings.HasPrefix(cleanPath, docsPrefix) {
-    return "", fmt.Errorf("небезопасное имя пользователя")
-}
-    
-    return cleanPath, nil
-}
-
 
 var chatHistory = make(map[string][]map[string]string)
 var chatMutex sync.RWMutex
@@ -145,9 +123,9 @@ func handleRegister(w http.ResponseWriter, r *http.Request) { // обработ�
 		http.Error(w, "Ошибка чтения", http.StatusBadRequest)
 		return
 	}
-	safeUsername := sanitizeUsername(req.Username)
-    if safeUsername == "" {
-        http.Error(w, "Некорректное имя пользователя", http.StatusBadRequest)
+	safeUsername, err := safety.SanitizeAndValidateUser(req.Username)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
         return
     }
 
@@ -170,13 +148,9 @@ func handleRegister(w http.ResponseWriter, r *http.Request) { // обработ�
 		return
 	}
 
-    userDir, err := makeSafeUserDir(req.Username)
-    if err != nil {
-    http.Error(w, err.Error(), http.StatusBadRequest)
-    return
-}
-    os.MkdirAll(userDir, 0755)
-    fmt.Println("Папка создана:", userDir)
+    userDir := filepath.Join("docs", safeUsername)
+	os.MkdirAll(userDir, 0755)
+	fmt.Println("Папка создана:", userDir)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -236,7 +210,7 @@ chatMutex.RLock()
 history := chatHistory[userID]
 chatMutex.RUnlock()
 
-texts, docs, scores, answer, pages, timings := rag.Ask(*globalCfg, req.Query, userID, history)
+texts, docs, scores, answer, pages, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history)
 
 	sources := []map[string]interface{}{}
 	for i := 0; i < len(texts); i++ {

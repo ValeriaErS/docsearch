@@ -3,6 +3,7 @@ package vector
 import (
     "testing"
 	"os"
+    "context"
 )
 
 func testClient() *QdrantClient {  //клиент без env
@@ -53,10 +54,12 @@ func TestQdrantPing(t *testing.T) {
         t.Skip("QDRANT_PORT не задан, пропускаем тест")
     }
     
-    client := NewQdrantClient()
-    err := client.Ping()
-    if err != nil {
-        t.Skip("Qdrant не запущен, пропускаем тест")
-    }
-    t.Log("Qdrant доступен")
+   client, err := NewQdrantClient()
+   if err != nil {
+    t.Skip("Ошибка подключения к qdrant:", err)
+}
+    if err := client.Ping(context.Background()); err != nil {
+    t.Skip("qdrant не запущен, пропускаем тест")
+}
+    t.Log("qdrant доступен")
 }

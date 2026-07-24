@@ -10,14 +10,14 @@ import (
     "context"
 )
 
-func Ask(cfg config.Config, question string, userID string, history []map[string]string) ([]string, []string, []float64, string, []int, map[string]float64) {
+func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string) ([]string, []string, []float64, string, []int, map[string]float64) {
     startTotal := time.Now()
 
     fmt.Println("Провайдер LLM:", cfg.LLM.Provider)
 
     
     startEmbed := time.Now() //эмбеддинг
-    vec, err := embed.GetEmbedding(context.Background(), question, &cfg)
+    vec, err := embed.GetEmbedding(ctx, question, &cfg)
     if err != nil {
         return []string{}, []string{}, []float64{}, "не могу понять ваш вопрос", []int{}, map[string]float64{}
     }
@@ -30,12 +30,17 @@ func Ask(cfg config.Config, question string, userID string, history []map[string
     }
 
     
-    client := vector.NewQdrantClient() //подключение к бд векторной
+    client,err := vector.NewQdrantClient() //подключение к бд векторной
+    if err != nil {
+    return []string{}, []string{}, []float64{}, "ошибка подключения к Qdrant", []int{}, map[string]float64{}
+}
     client.VectorSize = cfg.Embeddings.VectorSize
 
     
     startSearch := time.Now()  //поиск
-    results, err := client.Search("documents", vec32, cfg.Retrieval.TopK, userID)
+
+    results, err := client.Search(ctx, vector.CollectionName, vec32, cfg.Retrieval.TopK, userID)
+    
     if err != nil || len(results) == 0 {
         return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, map[string]float64{}
     }
@@ -97,7 +102,7 @@ func Ask(cfg config.Config, question string, userID string, history []map[string
         llmDuration = 0
     } else {
         startLLM := time.Now()
-       answer, err = llm.GetAnswerWithHistory(context.Background(), question, texts, docs, pages, history, &cfg)
+       answer, err = llm.GetAnswerWithHistory(ctx, question, texts, docs, pages, history, &cfg)
         if err != nil {
             return texts, docs, scores, "LLM не отвечает", pages, map[string]float64{}
         }

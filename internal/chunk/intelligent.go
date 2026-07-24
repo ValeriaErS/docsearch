@@ -91,6 +91,10 @@ type IntelligentChunk struct {  // один чанк
 	OverlapFrom int
 }
 func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens int) []IntelligentChunk {
+    if overlapTokens>=maxTokens{ //если перекрытие слишком большое уменьшаю его
+        overlapTokens=maxTokens/4
+    }
+    
     enc, _ := tiktoken.GetEncoding("cl100k_base")
     var chunks []IntelligentChunk
 

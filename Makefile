@@ -7,18 +7,14 @@ build:
 	go build -o bin/docsearch.exe ./cmd/docsearch
 
 demo:
-	@echo "Создаем папку для пользователя demo"
+	@echo "Демо режим (использует mock конфиг)"
 	mkdir docs\demo 2>nul || echo Папка уже существует
-	@echo "Копируем тестовые документы"
 	copy testdata\control\*.md docs\demo\ 2>nul || echo Файлы уже есть
-	@echo "Индексируем документы"
 	go run ./cmd/docsearch index --user demo
-	@echo "Задаем вопрос 1"
 	go run ./cmd/docsearch ask "What is RAG?" --user demo --out demo_result.json
-	@echo "Задаем вопрос 2"
 	go run ./cmd/docsearch ask "How to install DocSearch?" --user demo
-	@echo "Задаем вопрос 3 (должен сказать что нет ответа)"
 	go run ./cmd/docsearch ask "How to install Linux?" --user demo
+	@echo "Готово. Результат в demo_result.json"
 
 eval:
 	go run ./cmd/docsearch eval --user demo

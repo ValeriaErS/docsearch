@@ -9,6 +9,8 @@ import (
     "docsearch/internal/indexer"
     "docsearch/internal/rag"
     "docsearch/internal/vector"
+    "context"
+    "docsearch/internal/safety"
 )
 
 func main() {
@@ -65,11 +67,32 @@ func main() {
     }
 
     if needIndex {   // если нада индексировать
+        if userID==""{  // проверка указали ли пользователя
+            fmt.Println("Ошибка:для индексации нужно указать --user Имя")
+            return
+        }
+        safeUser, err := safety.SanitizeAndValidateUser(userID)
+        if err != nil {
+        fmt.Println("Ошибка: неверное имя пользователя:", err)
+        return
+    }
+    userID = safeUser
+
         fmt.Println("Передаю размер в индексер:", cfg.Embeddings.VectorSize) 
-        vc := vector.NewQdrantClient()
-        vc.VectorSize=cfg.Embeddings.VectorSize
+        
+        vc,err := vector.NewQdrantClient()
+        if err!=nil{
+            fmt.Println("Ошибка подключения к qdrant:", err)
+            return
+        }
+        if err := vc.Ping(context.Background()); err != nil {
+            fmt.Println("Ошибка: Qdrant не отвечает:", err)
+            return
+        }
+        vc.VectorSize = cfg.Embeddings.VectorSize
+
         idx := indexer.NewIndexer(cfg, vc, userID)
-        err = idx.Index()
+        err = idx.Index(context.Background())
         if err != nil {
             fmt.Println("Ошибка индексации:", err)
             return
@@ -78,12 +101,7 @@ func main() {
         fmt.Println("С индексацией все хорошо")
         return
     }
-    if len(args) > 0 && args[0] == "eval" {
-        runEval(cfg)
-        return
-    }
-
-
+    
     if question != "" {    // если задан вопрос
 if userID==""{     // пользователь обяхателен для ask
      fmt.Println("Ошибка: для поиска необходимо указать пользователя")
@@ -93,8 +111,7 @@ if userID==""{     // пользователь обяхателен для ask
 }
         startTime := time.Now()
 
-        results, docs, scores, answer, _, _ := rag.Ask(*cfg, question, userID, []map[string]string{})
-
+        results, docs, scores, answer, _, _ := rag.Ask(context.Background(), *cfg, question, userID, []map[string]string{})
         found := false     // проверяю порог
         for i := 0; i < len(scores); i++ {
             if scores[i] >= cfg.Retrieval.MinScore {

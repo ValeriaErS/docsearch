@@ -18,12 +18,12 @@ import (
 
 type Indexer struct { //структура индексации
 	Config *config.Config
-	VectorClient *vector.QdrantClient
+	VectorClient vector.VectorStore
 	IndexPath string
 	UserID string
 }
 
-func NewIndexer(cfg *config.Config, vc *vector.QdrantClient, userID string) *Indexer { //новый индексер
+func NewIndexer(cfg *config.Config, vc vector.VectorStore, userID string) *Indexer { //новый индексер
 	return &Indexer{
 		Config: cfg,
 		VectorClient: vc,
@@ -32,8 +32,8 @@ func NewIndexer(cfg *config.Config, vc *vector.QdrantClient, userID string) *Ind
 	}
 }
 
-func (i *Indexer) Index() error {
-	err := i.VectorClient.CreateCollection("documents") // создаю коллекцию
+func (i *Indexer) Index(ctx context.Context) error {
+	err := i.VectorClient.CreateCollection(ctx, vector.CollectionName) // создаю коллекцию
 	if err != nil {
 		return fmt.Errorf("ошибка создания коллекции: %w", err)
 	}
@@ -54,7 +54,7 @@ func (i *Indexer) Index() error {
 
 	if len(docs) == 0 {
 		fmt.Printf("В папке %s нет документов\n", userDocsPath)
-		i.deleteAllUserDocs()
+		i.deleteAllUserDocs(ctx)
 		return nil
 	}
 
@@ -63,13 +63,13 @@ func (i *Indexer) Index() error {
 	json.Unmarshal(data, &old)
 
 	for _, doc := range docs {
-		hash := hashText(doc.Text) 
+		hash := hashText(doc, i.Config) 
 
 		if old[doc.Name] != hash { // если хеш изменился или документа не было индексирую
 			fmt.Println("Индексирую:", doc.Name)
-			i.deleteDoc(doc.Name) 
+			i.deleteDoc(ctx, doc.Name) 
 
-			err := i.saveDoc(doc)
+			err := i.saveDoc(ctx, doc)
 			if err != nil {
 				fmt.Println("Ошибка сохранения:", err)
 				continue
@@ -91,7 +91,7 @@ func (i *Indexer) Index() error {
 		}
 		if !found {
 			fmt.Println("Удалён из Qdrant:", name)
-			i.deleteDoc(name)
+			i.deleteDoc(ctx, name)
 			delete(old, name)
 		}
 	}
@@ -103,7 +103,7 @@ func (i *Indexer) Index() error {
 	return nil
 }
 
-func (i *Indexer) saveDoc(doc corpus.Document) error {
+func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
 	chunks := chunk.SplitIntelligent(doc.Text, doc.Name, i.Config.Chunking.MaxTokens, i.Config.Chunking.OverlapTokens) // режу на чанки
 
 	fmt.Printf("Документ: %s, страниц: %d\n", doc.Name, len(doc.Pages))
@@ -112,19 +112,15 @@ func (i *Indexer) saveDoc(doc corpus.Document) error {
 		
 		page := 1
 		if doc.Pages != nil && len(doc.Pages) > 0 {
-			totalPages := len(doc.Pages)
-			chunksPerPage := len(chunks) / totalPages
-			if chunksPerPage == 0 {
-				chunksPerPage = 1
-			}
-			page = idx/chunksPerPage + 1
-			if page > totalPages {
-				page = totalPages
+
+			page = 1 + (idx * len(doc.Pages) / len(chunks))
+			if page > len(doc.Pages) {
+				page = len(doc.Pages)
 			}
 		}
 		fmt.Printf("Чанк %d: страница %d\n", idx+1, page)
 
-		vec, err := embed.GetEmbedding(context.Background(), ch.Text, i.Config) // получаю эмбеддинг
+		vec, err := embed.GetEmbedding(ctx, ch.Text, i.Config) // получаю эмбеддинг
 		if err != nil {
 			fmt.Println("Ошибка эмбеддинга:", err)
 			return err
@@ -147,7 +143,7 @@ func (i *Indexer) saveDoc(doc corpus.Document) error {
 			"page": page,
 		}
 
-		err = i.VectorClient.Save("documents", id, vec32, data)
+		err = i.VectorClient.Save(ctx, vector.CollectionName, id, vec32, data)
 		if err!= nil {
 			fmt.Println("Ошибка сохранения:", err)
 			return err
@@ -156,22 +152,30 @@ func (i *Indexer) saveDoc(doc corpus.Document) error {
 	return nil
 }
 
-func (i *Indexer) deleteDoc(name string) { // удаляю все чанки документа из бд
+func (i *Indexer) deleteDoc(ctx context.Context, name string) { // удаляю все чанки документа из бд
 	filter := map[string]interface{}{
         "must": []map[string]interface{}{
             {"key": "doc_id", "match": map[string]interface{}{"value": name}},
             {"key": "user_id", "match": map[string]interface{}{"value": i.UserID}},
         },
     }
-    i.VectorClient.Delete("documents", filter)
+    i.VectorClient.Delete(ctx, vector.CollectionName, filter)
 }
 
-func hashText(text string) string { // считаю хеш текста
-	h := sha256.Sum256([]byte(text))
-	return hex.EncodeToString(h[:])
+func hashText(doc corpus.Document, cfg *config.Config) string { // считаю хеш текста
+	data:=doc.Text + //текст с настройками 
+	    fmt.Sprintf("|%d|", cfg.Chunking.MaxTokens) +
+        fmt.Sprintf("%d|", cfg.Chunking.OverlapTokens) +
+        cfg.Embeddings.Model + "|" +
+        fmt.Sprintf("%d|", cfg.Embeddings.VectorSize) +
+        cfg.LLM.Model + "|" +
+        fmt.Sprintf("%d", cfg.Retrieval.TopK)
+
+    h := sha256.Sum256([]byte(data))
+    return hex.EncodeToString(h[:])
 }
 
-func (i *Indexer) deleteAllUserDocs() {
+func (i *Indexer) deleteAllUserDocs(ctx context.Context) {
 	filter := map[string]interface{}{
 		"must": []map[string]interface{}{
 			{
@@ -182,7 +186,8 @@ func (i *Indexer) deleteAllUserDocs() {
 			},
 		},
 	}
-	i.VectorClient.Delete("documents", filter)
+	i.VectorClient.Delete(ctx, vector.CollectionName, filter)
+	
 	fmt.Printf("Все документы пользователя %s удалены\n", i.UserID)
 }
 

@@ -35,29 +35,3 @@ type Chunk struct{
 	}
 	return result
 }
-/* func SplitText(text string, size int) []string {
-    var result []string
-    for i := 0; i < len(text); i += size {
-        end := i + size
-        if end > len(text) {
-            end = len(text)
-        }
-        result = append(result, text[i:end])
-    }
-    return result
-}
-*/
-/*func SplitText(text string, size int, overlap int) []string {
-    var result []string
-    start := 0
-    for start < len(text) {
-        end := start + size
-        if end > len(text) {
-            end = len(text)
-        }
-        result = append(result, text[start:end])
-        start = start + size - overlap
-    }
-    return result
-}
-*/

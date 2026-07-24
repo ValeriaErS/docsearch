@@ -9,6 +9,10 @@ import (
     "os"
     "time"
     "strconv"
+    "context" 
+)
+const (
+    CollectionName = "documents"
 )
 
 type QdrantClient struct {
@@ -17,27 +21,27 @@ type QdrantClient struct {
     VectorSize int
 }
 
-func NewQdrantClient() *QdrantClient {   // создаю нового клиента
+func NewQdrantClient() (*QdrantClient, error) {   // создаю нового клиента
    /* return &QdrantClient{Host: "localhost", Port: 6333}*/
 host := os.Getenv("QDRANT_HOST")
     if host == "" {
-        panic("QDRANT_HOST не задан в .env")
+        return nil,fmt.Errorf ("QDRANT_HOST не задан в .env")
     }
     
     portStr := os.Getenv("QDRANT_PORT")  //  порт из .env
     if portStr == "" {
-        panic("QDRANT_PORT не задан в .env")
+        return nil,fmt.Errorf ("QDRANT_PORT не задан в .env")
     }
 
     port, err := strconv.Atoi(portStr)
     if err != nil || port <= 0 {
-        panic("QDRANT_PORT должен быть положительным числом")
+        return nil,fmt.Errorf ("QDRANT_PORT должен быть положительным числом")
     }
     
     return &QdrantClient{
         Host: host,
         Port: port,
-    }
+    }, nil
 }
 
 func (q *QdrantClient) url(path string) string { //адрес
@@ -48,11 +52,11 @@ func (q *QdrantClient) url(path string) string { //адрес
     return fmt.Sprintf("%s://%s:%d%s", scheme, q.Host, q.Port, path)
 }
 
-func (q *QdrantClient) Ping() error {
+func (q *QdrantClient) Ping(ctx context.Context) error {
     cl := &http.Client{
         Timeout: 10 * time.Second,
     }
-    req, err := http.NewRequest("GET", q.url("/collections"), nil)
+    req, err := http.NewRequestWithContext(ctx, "GET", q.url("/collections"), nil)
     if err != nil {
         return err
     }
@@ -69,9 +73,9 @@ func (q *QdrantClient) Ping() error {
     return nil
 }
 
-func (q *QdrantClient) CreateCollection(name string) error {  // создаю коллекцию
+func (q *QdrantClient) CreateCollection(ctx context.Context, name string) error {  // создаю коллекцию
     
-    req, err := http.NewRequest("GET", q.url("/collections/" + name), nil)
+    req, err := http.NewRequestWithContext(ctx, "GET", q.url("/collections/"+name), nil)
     if err != nil {
         return err
     }
@@ -83,11 +87,12 @@ func (q *QdrantClient) CreateCollection(name string) error {  // создаю к
             return nil // коллекция уже существует
         }
     } else {
-    fmt.Printf("Коллекция не найдена, создаем новую: %v\n", err)
+        fmt.Printf("Коллекция не найдена, создаем новую: %v\n", err)
     }
 
     body := []byte(`{"vectors":{"size":` + fmt.Sprint(q.VectorSize) + `,"distance":"Cosine"}}`)  // коллекция с retry
-    req, err = http.NewRequest("PUT", q.url("/collections/"+name), bytes.NewBuffer(body))
+    req, err = http.NewRequestWithContext(ctx, "PUT", q.url("/collections/"+name), bytes.NewBuffer(body))
+
     if err != nil {
          return fmt.Errorf("ошибка создания запроса: %w", err)
     }
@@ -105,7 +110,7 @@ func (q *QdrantClient) CreateCollection(name string) error {  // создаю к
     return nil
 }
 
-func (q *QdrantClient) Save(name string, id string, vec []float32, data map[string]interface{}) error {  // сохраняю один чанк в бд
+func (q *QdrantClient) Save(ctx context.Context, name string, id string, vec []float32, data map[string]interface{}) error {  // сохраняю один чанк в бд
     fmt.Printf("Размер вектора: %d, ожидается: %d\n", len(vec), q.VectorSize)
     if len(vec) != q.VectorSize {
         return fmt.Errorf("Размер вектора %d, ожидается %d", len(vec), q.VectorSize)
@@ -121,7 +126,7 @@ func (q *QdrantClient) Save(name string, id string, vec []float32, data map[stri
          return fmt.Errorf("ошибка маршалинга: %w", err)
     }
 
-    req, err := http.NewRequest("PUT", q.url("/collections/"+name+"/points"), bytes.NewBuffer(j))
+    req, err := http.NewRequestWithContext(ctx, "PUT", q.url("/collections/"+name+"/points"), bytes.NewBuffer(j))
     if err != nil {
         return fmt.Errorf("ошибка создания запроса: %w", err)
     }
@@ -140,7 +145,7 @@ func (q *QdrantClient) Save(name string, id string, vec []float32, data map[stri
     return nil
 }
 
-func (q *QdrantClient) Search(name string, vec []float32, limit int, userID string) ([]map[string]interface{}, error) {   // ищу похожие чанки
+func (q *QdrantClient) Search(ctx context.Context, name string, vec []float32, limit int, userID string) ([]map[string]interface{}, error) {   // ищу похожие чанки
     d := map[string]interface{}{
         "vector": vec,
         "limit": limit,
@@ -166,7 +171,7 @@ func (q *QdrantClient) Search(name string, vec []float32, limit int, userID stri
         return nil, fmt.Errorf("ошибка маршалинга запроса: %w", err)
     }
 
-    req, err := http.NewRequest("POST", q.url("/collections/"+name+"/points/search"), bytes.NewBuffer(j))
+    req, err := http.NewRequestWithContext(ctx, "POST", q.url("/collections/"+name+"/points/search"), bytes.NewBuffer(j))
     if err != nil {
         return nil, fmt.Errorf("ошибка создания запроса: %w", err)
     }
@@ -200,7 +205,7 @@ func (q *QdrantClient) Search(name string, vec []float32, limit int, userID stri
     return out, nil
 }
 
-func (q *QdrantClient) Delete(name string, filter map[string]interface{}) error {
+func (q *QdrantClient) Delete(ctx context.Context, name string, filter map[string]interface{}) error {
     data := map[string]interface{}{
         "filter": filter,
     }
@@ -210,7 +215,7 @@ func (q *QdrantClient) Delete(name string, filter map[string]interface{}) error 
         return fmt.Errorf("ошибка маршалинга: %w", err)
     }
 
-    req, err := http.NewRequest("POST", q.url("/collections/"+name+"/points/delete"), bytes.NewBuffer(jsonData))
+    req, err := http.NewRequestWithContext(ctx, "POST", q.url("/collections/"+name+"/points/delete"), bytes.NewBuffer(jsonData))
     if err != nil {
         return fmt.Errorf("ошибка создания запроса: %w", err)
     }
@@ -228,7 +233,7 @@ func (q *QdrantClient) Delete(name string, filter map[string]interface{}) error 
     return nil
 }
 
-func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) {  //повторные попытки
+func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { //повторные попытки
     client := &http.Client{
         Timeout: 60 * time.Second,
     }
@@ -240,15 +245,18 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) {  
         }
         
         resp, err := client.Do(req)
-        if err == nil && resp.StatusCode == 200 {
+        if err != nil { 
+            lastErr = err
+            continue
+        }
+
+        if resp.StatusCode == 200 {
             return resp, nil
         }
-        if err != nil {
-            lastErr = err
-        } else if resp.StatusCode != 200 {
-            resp.Body.Close()
-            lastErr = fmt.Errorf("статус %d", resp.StatusCode)
-        }
+        
+        body, _ := io.ReadAll(resp.Body)
+        resp.Body.Close()
+        lastErr = fmt.Errorf("статус %d: %s", resp.StatusCode, string(body))
     }
     return nil, fmt.Errorf("не удалось выполнить запрос после %d попыток: %w", maxRetries, lastErr)
 }
