@@ -9,16 +9,31 @@ func NewFakeVectorStore() *FakeVectorStore{ //фейк клиент
 		Points:[]map[string]interface{}{},
 	}
 }
-func (f *FakeVectorStore) Search(ctx context.Context, name string, vec []float32, limit int, userID string)([] map[string]interface{},error){ //похожие чанки
-	if len(f.Points)==0{
-		return []map[string]interface{}{},nil
-	}
-	result:=[]map[string]interface{}{} //возрат первых штук
-	for i:=0;i<limit && i<len(f.Points);i++{
-		result=append(result,f.Points[i])
-	}
-	return result,nil
+func (f *FakeVectorStore) Search(ctx context.Context, name string, vec []float32, limit int, userID string) ([]map[string]interface{}, error) {
+    if len(f.Points) == 0 {
+        return []map[string]interface{}{}, nil
+    }
+
+    result := []map[string]interface{}{}  // фильтрую по user_id
+    for _, point:= range f.Points {
+        payload, ok:= point["payload"].(map[string]interface{})
+        if !ok {
+            continue
+        }
+        pointUserID, ok:= payload["user_id"].(string)
+        if !ok {
+            continue
+        }
+        if pointUserID == userID {
+            result = append(result, point)
+        }
+        if len(result) >= limit {
+            break
+        }
+    }
+    return result, nil
 }
+
 func (f *FakeVectorStore) Save(ctx context.Context, name string, id string, vec []float32, data map[string] interface{}) error {  //в память сохраняю
 f.Points=append(f.Points,map[string]interface{}{
 	"id": id,

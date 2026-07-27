@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"gopkg.in/yaml.v2"
+	"fmt"
 )
 
 
@@ -50,6 +51,22 @@ func LoadConfig(path string) (*Config, error) { //читает файл config.y
 	if err != nil {
 		return nil, err
 	}
+	if cfg.Embeddings.VectorSize<=0{
+		return nil,fmt.Errorf("embeddings.vector_size должен быть больше 0 (сейчас: %d)",cfg.Embeddings.VectorSize)
+	}
+	if cfg.Retrieval.TopK<=0{
+		return nil,fmt.Errorf("retrieval.top_k должен быть больше 0 (сейчас: %d)", cfg.Retrieval.TopK)
+	}
+	 if cfg.Retrieval.MinScore < 0 || cfg.Retrieval.MinScore > 1 {
+        return nil, fmt.Errorf("retrieval.min_score должен быть в [0,1] (сейчас: %.2f)", cfg.Retrieval.MinScore)
+    }
+
+	if cfg.Chunking.MaxTokens<=0{
+		return nil, fmt.Errorf("chunking.max_tokens должен быть больше 0 (сейчас: %d)", cfg.Chunking.MaxTokens)
+	}
+	if cfg.Chunking.OverlapTokens < 0 {
+        return nil, fmt.Errorf("chunking.overlap_tokens не может быть отрицательным (сейчас: %d)", cfg.Chunking.OverlapTokens)
+    }
 
 	return &cfg, nil
 }
