@@ -13,6 +13,8 @@ import (
 	"docsearch/internal/rag"
 	"path/filepath"
 	"docsearch/internal/safety"
+	"docsearch/internal/vector"
+	"context"  
 )
 
 var chatHistory = make(map[string][]map[string]string)
@@ -40,6 +42,7 @@ func runWeb(cfg *config.Config, port string) {
 	http.HandleFunc("/login", handleLogin) // обработчики
 	http.HandleFunc("/register", handleRegister)
 	http.HandleFunc("/ask", handleAsk)
+	http.HandleFunc("/health", handleHealth)
 	
 
 	fmt.Println("Сайт запущен: http://localhost" + port)
@@ -234,4 +237,20 @@ chatMutex.Unlock()
 		"sources": sources,
 		"timings": timings,
 	})
+}
+func handleHealth(w http.ResponseWriter,r *http.Request){
+		client,err:=vector.NewQdrantClient()
+		if err!=nil{
+			http.Error(w,"Qdrant недоступен", http.StatusServiceUnavailable)
+			return
+		}
+		if err:=client.Ping(context.Background());err!=nil{
+			 http.Error(w, "Qdrant не отвечает", http.StatusServiceUnavailable)
+			 return
+		}
+		 w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{
+        "status": "ok",
+        "qdrant": "connected",
+    })
 }

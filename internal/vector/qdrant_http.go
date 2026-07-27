@@ -74,7 +74,11 @@ func (q *QdrantClient) Ping(ctx context.Context) error {
 }
 
 func (q *QdrantClient) CreateCollection(ctx context.Context, name string) error {  // создаю коллекцию
-    
+    if q.VectorSize<=0{ //проверка размера вектора
+        return fmt.Errorf("некорректный размер вектора:%d",q.VectorSize)
+    }
+
+
     req, err := http.NewRequestWithContext(ctx, "GET", q.url("/collections/"+name), nil)
     if err != nil {
         return err
@@ -196,12 +200,17 @@ func (q *QdrantClient) Search(ctx context.Context, name string, vec []float32, l
 
     out := []map[string]interface{}{}
     for _, item := range res.Result {
-        out = append(out, map[string]interface{}{
-            "id": item.Id, 
-            "score": item.Score, 
-            "payload": item.Payload,
-        })
+    
+    payloadUserID, ok := item.Payload["user_id"].(string) //точно ли док нашего пользователя
+    if !ok || payloadUserID != userID {
+        continue
     }
+    out = append(out, map[string]interface{}{
+        "id": item.Id,
+        "score": item.Score,
+        "payload": item.Payload,
+    })
+}
     return out, nil
 }
 

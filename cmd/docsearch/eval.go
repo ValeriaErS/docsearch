@@ -115,6 +115,26 @@ if _, err := os.Stat(userDir); os.IsNotExist(err) {
         }
 
         recall := float64(found) / float64(len(q.ExpectedDocs))
+        
+        precision := 0.0  //  сколько из найденных документов правильные
+        if len(docs) > 0 {
+            correct := 0
+            for _, foundDoc := range docs {
+                for _, expected := range q.ExpectedDocs {
+                    if foundDoc == expected {
+                        correct++
+                        break
+            }
+        }
+    }
+    precision = float64(correct) / float64(len(docs))
+}
+
+f1 := 0.0   // среднее между точностью и полнотой
+if precision+recall > 0 {
+    f1 = 2 * precision * recall / (precision + recall)
+}
+
         totalRecall += recall
 
         result := EvalResult{
@@ -127,6 +147,9 @@ if _, err := os.Stat(userDir); os.IsNotExist(err) {
         results = append(results, result)
 
         fmt.Printf("Recall: %.0f%%\n", recall*100)
+        fmt.Printf("  Precision: %.0f%%\n", precision*100)
+        fmt.Printf("  F1: %.0f%%\n", f1*100)
+
         if result.Success {
             fmt.Println("успешно")
         } else {
@@ -150,4 +173,30 @@ if _, err := os.Stat(userDir); os.IsNotExist(err) {
     resultJSON, _ := json.MarshalIndent(results, "", "  ")
     os.WriteFile("eval_results.json", resultJSON, 0644)
     fmt.Println("\n Подробные результаты сохранены в eval_results.json")
+    
+    fmt.Println("\n--- Детальные метрики по вопросам ---")
+    fmt.Println("№ | Recall | Precision | F1")
+    fmt.Println("--|--------|-----------|----")
+    for i, r := range results {
+    
+    precision := 0.0  // precision для каждого вопроса
+    if len(r.FoundDocs) > 0 {
+        correct := 0
+        for _, foundDoc := range r.FoundDocs {
+            for _, expected := range r.ExpectedDocs {
+                if foundDoc == expected {
+                    correct++
+                    break
+                }
+            }
+        }
+        precision = float64(correct) / float64(len(r.FoundDocs))
+    }
+    
+    f1 := 0.0   // считаю F1
+    if precision+r.Recall > 0 {
+        f1 = 2 * precision * r.Recall / (precision + r.Recall)
+    }
+    fmt.Printf("%d | %.0f%% | %.0f%% | %.0f%%\n", i+1, r.Recall*100, precision*100, f1*100)
+}
 }
