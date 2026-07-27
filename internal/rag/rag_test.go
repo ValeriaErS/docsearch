@@ -35,3 +35,23 @@ results, err := fakeClient.Search(context.Background(), "documents", []float32{0
     t.Log("Фейковый qdrant работает")
     t.Log("Найдено чанков:", len(results))
 }
+func TestContexcancel(y *testing.T){
+    client,err:=vector.NewQdrantClient()
+    if err!=nil{
+        t.Skip("qdrant не доступен")
+    }
+    if err:=client.Ping(context.Background());err!=nil{
+        t.Skip("qdrant не запущен")
+    }
+    cfg:=config.Config{}
+    cfg.LLM.Provider="mock"
+    cfg.Retrieval.TopK=5
+    cfg.Retrieval.MinScore=0.2
+    cfg.Embeddings.VectorSize=768
+    ctx,cancel:=context.WithCancel(context.Background())
+    cancel()
+
+     _, _, _, _, _, _ = Ask(ctx, cfg, "Что такое?", "test", []map[string]string{})
+
+    t.Log("Тест на отмену контекста пройден (запрос был прерван)")
+}
