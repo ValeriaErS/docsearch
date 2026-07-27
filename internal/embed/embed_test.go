@@ -1,7 +1,12 @@
 package embed
 
 import (
+    "context"
+    "encoding/json"
+    "net/http"
+    "net/http/httptest"
     "testing"
+    "docsearch/internal/config"
 )
 
 const LongVector = 768
@@ -37,4 +42,47 @@ func TestDrygText(t *testing.T) {
         }
     }
     t.Log("Все векторы одинакового размера")
+}
+func TestGetEmbeddingSize(t *testing.T) {
+    
+    server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path != "/v1/embeddings" {
+            t.Errorf("Неверный путь: %s", r.URL.Path)
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "data": []map[string]interface{}{
+                {
+                    "embedding": make([]float64, 768),
+                },
+            },
+        })
+    }))
+    defer server.Close()
+
+    cfg := &config.Config{
+        Embeddings: struct {
+            Provider  string `yaml:"provider"`
+            Model  string `yaml:"model"`
+            BaseURL  string `yaml:"base_url"`
+            VectorSize int `yaml:"vector_size"`
+        }{
+            Provider: "local",
+            Model: "test-model",
+            BaseURL: server.URL,
+            VectorSize: 768,
+        },
+    }
+
+    embedding, err := GetEmbedding(context.Background(), "тестовый текст", cfg)
+    if err != nil {
+        t.Fatalf("Ошибка получения эмбеддинга: %v", err)
+    }
+
+    if len(embedding) != 768 {
+        t.Errorf("Неверный размер вектора: ожидалось 768, получено %d", len(embedding))
+    }
+
+    t.Logf(" Эмбеддинг получен, размер: %d", len(embedding))
 }
