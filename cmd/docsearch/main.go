@@ -11,6 +11,8 @@ import (
     "docsearch/internal/vector"
     "context"
     "docsearch/internal/safety"
+    "docsearch/internal/server"
+    "docsearch/internal/eval"
 )
 
 func main() {
@@ -57,12 +59,12 @@ func main() {
         return
     }
     if evalMode {
-        runEval(cfg)
+        eval.RunEval(cfg)
         return
     }
 
     if serveMode {  // если запускаю сервер
-        runWeb(cfg, port)
+        server.RunWeb(cfg, port)
         return
     }
 

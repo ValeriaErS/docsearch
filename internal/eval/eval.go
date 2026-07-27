@@ -1,4 +1,4 @@
-package main
+package eval
 
 import (
     "encoding/json"
@@ -23,7 +23,7 @@ type EvalResult struct {
     Success bool `json:"success"`
 }
 
-func runEval(cfg *config.Config) {
+func RunEval(cfg *config.Config) {
     fmt.Println("Запуск")
 
     if cfg.LLM.Provider == "mock" {

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"sync"
@@ -22,7 +22,7 @@ var chatMutex sync.RWMutex
 var database *db.DB
 var globalCfg *config.Config
 
-func runWeb(cfg *config.Config, port string) {
+func RunWeb(cfg *config.Config, port string) {
 	globalCfg = cfg
 	
 	var err error
