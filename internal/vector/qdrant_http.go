@@ -241,6 +241,7 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
     var lastErr error
     for attempt := 0; attempt < maxRetries; attempt++ {
         if attempt > 0 {
+            fmt.Printf("Повторная попытка %d из %d\n,attemp+1,maxRetries")
             time.Sleep(time.Duration(attempt) * time.Second) 
         }
         
