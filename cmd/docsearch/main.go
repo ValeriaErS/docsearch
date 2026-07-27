@@ -13,6 +13,7 @@ import (
     "docsearch/internal/safety"
     "docsearch/internal/server"
     "docsearch/internal/eval"
+    
 )
 
 func main() {
@@ -105,7 +106,7 @@ func main() {
     }
     
     if question != "" {    // если задан вопрос
-if userID==""{     // пользователь обяхателен для ask
+    if userID==""{     // пользователь обяхателен для ask
      fmt.Println("Ошибка: для поиска необходимо указать пользователя")
         fmt.Println("Используйте: docsearch.exe ask \"вопрос\" --user Имя")
         fmt.Println("Пример: docsearch.exe ask \"Что такое RAG?\" --user Валерия")
@@ -113,7 +114,7 @@ if userID==""{     // пользователь обяхателен для ask
 }
         startTime := time.Now()
 
-        results, docs, scores, answer, _, _ := rag.Ask(context.Background(), *cfg, question, userID, []map[string]string{})
+        results, docs, scores, answer, _, tokensUsed, _ := rag.Ask(context.Background(), *cfg, question, userID, []map[string]string{})
         found := false     // проверяю порог
         for i := 0; i < len(scores); i++ {
             if scores[i] >= cfg.Retrieval.MinScore {
@@ -162,7 +163,7 @@ if userID==""{     // пользователь обяхателен для ask
             Answer:answer,
             Sources:sources,
             Model:cfg.LLM.Model,
-            TokensUsed: cfg.LLM.MaxTokens,
+            TokensUsed: tokensUsed,
             DurationMs:duration,
         }
 

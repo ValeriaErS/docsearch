@@ -14,7 +14,8 @@ import (
 	"path/filepath"
 	"docsearch/internal/safety"
 	"docsearch/internal/vector"
-	"context"  
+	"context" 
+	 
 )
 
 var chatHistory = make(map[string][]map[string]string)
@@ -213,7 +214,7 @@ chatMutex.RLock()
 history := chatHistory[userID]
 chatMutex.RUnlock()
 
-texts, docs, scores, answer, pages, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history)
+texts, docs, scores, answer, pages, _, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history)
 
 	sources := []map[string]interface{}{}
 	for i := 0; i < len(texts); i++ {

@@ -23,10 +23,10 @@ func init() {
 	godotenv.Load() // ключик из env
 }
 
-func GetAnswerWithHistory(ctx context.Context, question string, chunks []string, docNames []string, pages []int, history []map[string]string, cfg *config.Config) (string, error) {
+func GetAnswerWithHistory(ctx context.Context, question string, chunks []string, docNames []string, pages []int, history []map[string]string, cfg *config.Config) (string, int, error) {
     apiKey := os.Getenv("LLM_API_KEY")
     if apiKey == "" {
-        return "", fmt.Errorf("нет ключа")
+        return "", 0, fmt.Errorf("нет ключа")
     }
 
     url := cfg.LLM.BaseURL + "/chat/completions"
@@ -101,13 +101,13 @@ func GetAnswerWithHistory(ctx context.Context, question string, chunks []string,
 
     jsonData, err := json.Marshal(data)
     if err != nil {
-        return "", err
-    }
+    return "", 0, err
+}
 
      req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
     if err != nil {
-        return "", err
-    }
+    return "", 0, err
+}
 
     req.Header.Set("Content-Type", "application/json")
     req.Header.Set("Authorization", "Bearer "+apiKey)
@@ -147,6 +147,9 @@ var lastErr error
                     Content string `json:"content"`
                 } `json:"message"`
             } `json:"choices"`
+            Usage struct {
+                TotalTokens int `json:"total_tokens"`
+                } `json:"usage"`
         }
 
         err = json.Unmarshal(body, &result)
@@ -179,12 +182,13 @@ var lastErr error
 
         answer = strings.TrimSpace(answer)
 
-        return answer, nil
+        tokensUsed := result.Usage.TotalTokens
+        return answer, tokensUsed, nil
     }
 
-    return "", fmt.Errorf("не удалось получить ответ после %d попыток: %w", maxRetries, lastErr)
+    return "", 0, fmt.Errorf("не удалось получить ответ после %d попыток: %w", maxRetries, lastErr)
 }
 
-func GetAnswer(ctx context.Context, question string, chunks []string, cfg *config.Config) (string, error) {
+func GetAnswer(ctx context.Context, question string, chunks []string, cfg *config.Config) (string, int, error) {
     return GetAnswerWithHistory(ctx, question, chunks, []string{}, []int{}, []map[string]string{}, cfg)
 }
