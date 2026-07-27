@@ -44,6 +44,13 @@ func runEval(cfg *config.Config) {
     fmt.Println("Пример: .\\docsearch.exe eval --user Екатерина")
     return
 }
+userDir := "docs/" + userForEval  // проверка существует ли папка пользователя
+if _, err := os.Stat(userDir); os.IsNotExist(err) {
+    fmt.Printf("Ошибка: пользователь %s не существует или нет документов\n", userForEval)
+    fmt.Println("Сначала проиндексируйте документы: docsearch.exe index --user", userForEval)
+    return
+}
+
     fmt.Printf("Пользователь: %s\n\n", userForEval)
 
     data, err := os.ReadFile("testdata/eval.json")
