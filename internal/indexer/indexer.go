@@ -54,6 +54,18 @@ func (i *Indexer) Index(ctx context.Context) error {
 
 	if len(docs) == 0 {
 		fmt.Printf("В папке %s нет документов\n", userDocsPath)
+		
+		entries,err:=os.ReadDir(userDocsPath)  // проверка что в папке есть файлы
+		if err!=nil{
+			fmt.Println("Не удалось проверить папку:",err)
+		}else if len(entries)==0{
+			fmt.Println("Папка пуста. Положите документы в:", userDocsPath)
+		}else {
+			fmt.Printf("В папке есть файлы, но они не подходят по формату.\n")
+			fmt.Printf("Поддерживаются форматы: %v\n", i.Config.Corpus.Formats)
+			fmt.Println("Проверьте расширения файлов (.md, .txt, .pdf, .html)")
+		}
+		
 		i.deleteAllUserDocs(ctx)
 		return nil
 	}
