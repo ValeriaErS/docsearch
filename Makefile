@@ -25,3 +25,8 @@ clean:
 	del /f /q eval_results.json 2>nul
 	del /f /q demo_result.json 2>nul
 	rmdir /s /q docs\demo 2>nul
+
+install: build
+	@echo "Устанавливаю docsearch"
+	copy bin\docsearch.exe docsearch.exe
+	@echo "Готово! Теперь можно запускать: .\docsearch.exe"
