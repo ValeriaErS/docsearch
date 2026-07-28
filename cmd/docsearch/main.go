@@ -15,6 +15,47 @@ import (
     "docsearch/internal/eval"
     
 )
+func runDemo(cfg *config.Config, userID string, vectorClient vector.VectorStore) {
+    fmt.Println("Демо режим")
+
+    fmt.Println("1. Индексирую документы...")
+    idx := indexer.NewIndexer(cfg, vectorClient, userID)
+    err := idx.Index(context.Background())
+    if err != nil {
+        fmt.Println("Ошибка индексации:", err)
+        return
+    }
+    fmt.Println("Индексация завершена")
+
+    questions := []string{
+        "What is RAG?",
+        "How to install DocSearch?",
+        "How to install Linux?",
+    }
+
+    for _, q := range questions {
+    fmt.Printf("\n2. Вопрос: %s\n", q)
+   _, docs, scores, answer, _, tokensUsed, _ := rag.Ask(context.Background(), *cfg, q, userID, []map[string]string{}, vectorClient)
+
+    found := false
+    for i := 0; i < len(scores); i++ {
+        if scores[i] >= cfg.Retrieval.MinScore {
+            found = true
+            break
+        }
+    }
+
+    if !found || answer == "" {
+        fmt.Println("Ответ: В документации нет информации по этому вопросу")
+    } else {
+        fmt.Printf("Ответ: %s\n", answer)
+        fmt.Printf("Источников: %d\n", len(docs))
+        fmt.Printf("Токенов: %d\n", tokensUsed)
+    }
+}
+
+    fmt.Println("\n Демо все")
+}
 
 func main() {
     args := os.Args[1:]   //что ввел кроме 1 
@@ -51,7 +92,17 @@ func main() {
             i = i + 1
         } else if args[i] == "eval" {
             evalMode = true 
+        } else if args[i] == "demo" {
+         cfg, err := config.LoadConfig(configFile)
+        if err != nil {
+            fmt.Println("Ошибка загрузки конфига:", err)
+            return
         }
+        fakeClient := vector.NewFakeVectorStore()
+        fmt.Println("Использую FakeVectorStore (mock-режим)")
+        runDemo(cfg, "demo", fakeClient)
+        return
+    }   
 }
 
     cfg, err := config.LoadConfig(configFile)
@@ -59,13 +110,33 @@ func main() {
         fmt.Println("Ошибка загрузки конфига:", err)
         return
     }
+    var sharedVectorClient vector.VectorStore //общий клиент
+    if cfg.Embeddings.Provider=="mock"{
+        sharedVectorClient=vector.NewFakeVectorStore()
+        fmt.Println("Использую FakeVectorStore (mock-режим)")
+    } else{
+        realClient,err:=vector.NewQdrantClient()
+        if err!=nil{
+            fmt.Println("Ошибка подключения к Qdrant:", err)
+            return
+        }
+        if err:=realClient.Ping(context.Background());err!=nil{
+            fmt.Println("Ошибка: Qdrant не отвечает:", err)
+            return
+        }
+        sharedVectorClient=realClient
+        if qdrantClient,ok:=sharedVectorClient.(*vector.QdrantClient);ok{
+            qdrantClient.VectorSize=cfg.Embeddings.VectorSize
+        }
+    }
+
     if evalMode {
         eval.RunEval(cfg)
         return
     }
 
     if serveMode {  // если запускаю сервер
-        server.RunWeb(cfg, port)
+        server.RunWeb(cfg, port, sharedVectorClient)
         return
     }
 
@@ -82,19 +153,8 @@ func main() {
     userID = safeUser
 
         fmt.Println("Передаю размер в индексер:", cfg.Embeddings.VectorSize) 
-        
-        vc,err := vector.NewQdrantClient()
-        if err!=nil{
-            fmt.Println("Ошибка подключения к qdrant:", err)
-            return
-        }
-        if err := vc.Ping(context.Background()); err != nil {
-            fmt.Println("Ошибка: Qdrant не отвечает:", err)
-            return
-        }
-        vc.VectorSize = cfg.Embeddings.VectorSize
 
-        idx := indexer.NewIndexer(cfg, vc, userID)
+        idx := indexer.NewIndexer(cfg, sharedVectorClient, userID)
         err = idx.Index(context.Background())
         if err != nil {
             fmt.Println("Ошибка индексации:", err)
@@ -107,14 +167,15 @@ func main() {
     
     if question != "" {    // если задан вопрос
     if userID==""{     // пользователь обяхателен для ask
-     fmt.Println("Ошибка: для поиска необходимо указать пользователя")
+        fmt.Println("Ошибка: для поиска необходимо указать пользователя")
         fmt.Println("Используйте: docsearch.exe ask \"вопрос\" --user Имя")
         fmt.Println("Пример: docsearch.exe ask \"Что такое RAG?\" --user Валерия")
         return
-}
+     }
+
         startTime := time.Now()
 
-        results, docs, scores, answer, _, tokensUsed, _ := rag.Ask(context.Background(), *cfg, question, userID, []map[string]string{})
+       results, docs, scores, answer, _, tokensUsed, _ := rag.Ask(context.Background(), *cfg, question, userID, []map[string]string{}, sharedVectorClient)
         found := false     // проверяю порог
         for i := 0; i < len(scores); i++ {
             if scores[i] >= cfg.Retrieval.MinScore {

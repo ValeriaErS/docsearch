@@ -10,7 +10,7 @@ import (
     "context"
 )
 
-func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string) ([]string, []string, []float64, string, []int, int, map[string]float64) {
+func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, int, map[string]float64) {
     startTotal := time.Now()
 
     fmt.Println("Провайдер LLM:", cfg.LLM.Provider)
@@ -27,14 +27,20 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
         vec32 = append(vec32, float32(vec[i]))
     }
 
-    client, err := vector.NewQdrantClient() //подключение к бд векторной
-    if err != nil {
-        return []string{}, []string{}, []float64{}, "ошибка подключения к Qdrant", []int{}, 0, map[string]float64{}
+    if vectorClient==nil{ // если клиент не передан создаю реальный бд
+        var err error
+        vectorClient,err=vector.NewQdrantClient()
+        if err!=nil{
+             return []string{}, []string{}, []float64{}, "ошибка подключения к Qdrant", []int{}, 0, map[string]float64{}
+        }
+    if qdrantClient,ok:=vectorClient.(*vector.QdrantClient);ok{
+        qdrantClient.VectorSize = cfg.Embeddings.VectorSize
     }
-    client.VectorSize = cfg.Embeddings.VectorSize
+}
+
 
     startSearch := time.Now() //поиск
-    results, err := client.Search(ctx, vector.CollectionName, vec32, cfg.Retrieval.TopK, userID)
+    results, err := vectorClient.Search(ctx, vector.CollectionName, vec32, cfg.Retrieval.TopK, userID)
     if err != nil || len(results) == 0 {
         return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, 0, map[string]float64{}
     }

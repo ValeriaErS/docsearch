@@ -7,13 +7,11 @@ build:
 	go build -o bin/docsearch.exe ./cmd/docsearch
 
 demo:
-	@echo "Демо режим (использует mock конфиг)"
+	@echo "Демо режим (mock)"
+	del .docsearch_index_demo.json 2>nul || echo Индекс не найден
 	mkdir docs\demo 2>nul || echo Папка уже существует
 	copy testdata\control\*.md docs\demo\ 2>nul || echo Файлы уже есть
-	go run ./cmd/docsearch index --user demo
-	go run ./cmd/docsearch ask "What is RAG?" --user demo --out demo_result.json
-	go run ./cmd/docsearch ask "How to install DocSearch?" --user demo
-	go run ./cmd/docsearch ask "How to install Linux?" --user demo
+	go run ./cmd/docsearch demo --config configs/config.mock.yml
 	@echo "Готово. Результат в demo_result.json"
 
 eval:

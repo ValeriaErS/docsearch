@@ -12,6 +12,18 @@ import (
 )
 
 func GetEmbedding(ctx context.Context, text string, cfg *config.Config) ([]float64, error) { //отправка текста в LM с возвратом эмбеддинга
+    if cfg.Embeddings.Provider=="mock"{ //возврат фиктивного вектора при моке
+        vectorSize:=cfg.Embeddings.VectorSize
+        if vectorSize<=0{
+            vectorSize=768
+        }
+        embedding:=make([]float64,vectorSize) //возврат случайного вектора 
+        for i:=0;i<vectorSize;i++{
+            embedding[i]=0.1*float64(i%10)
+        }
+        return embedding,nil
+    }
+    
     url := cfg.Embeddings.BaseURL + "/v1/embeddings"
     model := cfg.Embeddings.Model
 

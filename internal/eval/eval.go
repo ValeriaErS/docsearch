@@ -80,7 +80,7 @@ if _, err := os.Stat(userDir); os.IsNotExist(err) {
     for i, q := range questions {
         fmt.Printf("--- Вопрос %d: \"%s\" ---\n", i+1, q.Query)
 
-       texts, docs, scores, answer, pages, _, _ := rag.Ask(context.Background(), *cfg, q.Query, userForEval, []map[string]string{})
+      texts, docs, scores, answer, pages, _, _ := rag.Ask(context.Background(), *cfg, q.Query, userForEval, []map[string]string{}, nil)
         fmt.Printf("Ожидаемые документы: %v\n", q.ExpectedDocs)
         fmt.Printf("Найденные документы: %v\n", docs)
         fmt.Printf("Найдено текстов: %d\n", len(texts))

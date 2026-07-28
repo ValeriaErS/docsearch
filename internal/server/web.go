@@ -22,9 +22,11 @@ var chatHistory = make(map[string][]map[string]string)
 var chatMutex sync.RWMutex
 var database *db.DB
 var globalCfg *config.Config
+var vectorClientGlobal vector.VectorStore 
 
-func RunWeb(cfg *config.Config, port string) {
+func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 	globalCfg = cfg
+	vectorClientGlobal = vectorClient
 	
 	var err error
 	database, err = db.NewDB()
@@ -214,8 +216,7 @@ chatMutex.RLock()
 history := chatHistory[userID]
 chatMutex.RUnlock()
 
-texts, docs, scores, answer, pages, _, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history)
-
+texts, docs, scores, answer, pages, _, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history, vectorClientGlobal)
 	sources := []map[string]interface{}{}
 	for i := 0; i < len(texts); i++ {
 		sources = append(sources, map[string]interface{}{
