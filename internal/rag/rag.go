@@ -42,7 +42,11 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 
     found := false //проверка порога
     for _, r := range results {
-        if r["score"].(float64) >= cfg.Retrieval.MinScore {
+        score,ok:=r["score"].(float64)
+        if !ok{
+           continue 
+        }
+        if score >= cfg.Retrieval.MinScore {
             found = true
             break
         }
@@ -50,12 +54,18 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
     if !found {
         return []string{}, []string{}, []float64{}, "ничего не нашла (ниже порога)", []int{}, 0, map[string]float64{}
     }
+
     filteredResults := []map[string]interface{}{} //фильтрую чанки ниже порога
     for _, r := range results {
-        if r["score"].(float64) >= cfg.Retrieval.MinScore {
+        score,ok:=r["score"].(float64)
+        if !ok{
+            continue
+        }
+        if score >= cfg.Retrieval.MinScore {
             filteredResults = append(filteredResults, r)
         }
     }
+
     if len(filteredResults) == 0 {
         return []string{}, []string{}, []float64{}, "В документации нет информации по этому вопросу", []int{}, 0, map[string]float64{}
     }
@@ -67,16 +77,35 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
     pages := []int{}
 
     for _, r := range results {
-        payload := r["payload"].(map[string]interface{})
-        texts = append(texts, payload["chunk_text"].(string))
-        docs = append(docs, payload["doc_id"].(string))
-        scores = append(scores, r["score"].(float64))
+        payload ,ok:= r["payload"].(map[string]interface{})
+        if !ok {
+            continue
+        }
+        chunkText,ok:=payload["chunk_text"].(string)
+        if !ok ||chunkText==""{
+             continue
+        }
+        docID,ok:=payload["doc_id"].(string)
+        if !ok || docID==""{
+            continue
+        }
+        chunkScore, ok := r["score"].(float64)
+        if !ok {
+        continue
+        }
+        
+        texts = append(texts, chunkText)
+        docs = append(docs, docID)
+        scores = append(scores, chunkScore)
 
         page := 1
         if p, ok := payload["page"].(float64); ok && int(p) > 0 {
             page = int(p)
         }
         pages = append(pages, page)
+    }
+    if len(texts)==0{
+        return []string{}, []string{}, []float64{}, "В документации нет информации по этому вопросу", []int{}, 0, map[string]float64{}
     }
 
     var answer string //llm
