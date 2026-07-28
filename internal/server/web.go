@@ -1,37 +1,37 @@
 package server
 
 import (
-	"sync"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"os"
-	"strings"
+	"context"
 	"docsearch/internal/auth"
 	"docsearch/internal/config"
 	"docsearch/internal/db"
 	"docsearch/internal/rag"
-	"path/filepath"
 	"docsearch/internal/safety"
 	"docsearch/internal/vector"
-	"context" 
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"time"
-	 
 )
-var loginAttempts=make(map[string]int)
-var loginBlocked=make(map[string]time.Time)
+
+var loginAttempts = make(map[string]int)
+var loginBlocked = make(map[string]time.Time)
 var loginMutex sync.Mutex
 
 var chatHistory = make(map[string][]map[string]string)
 var chatMutex sync.RWMutex
 var database *db.DB
 var globalCfg *config.Config
-var vectorClientGlobal vector.VectorStore 
+var vectorClientGlobal vector.VectorStore
 
 func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 	globalCfg = cfg
 	vectorClientGlobal = vectorClient
-	
+
 	var err error
 	database, err = db.NewDB()
 	if err != nil {
@@ -50,18 +50,17 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 	http.HandleFunc("/register", handleRegister)
 	http.HandleFunc("/ask", handleAsk)
 	http.HandleFunc("/health", handleHealth)
-	
 
-	srv:=&http.Server{
-		Addr: "0.0.0.0"+port,
-		Handler: nil,
-		ReadTimeout:10 * time.Second,
-		WriteTimeout:30 * time.Second,
-		IdleTimeout:120 * time.Second,
+	srv := &http.Server{
+		Addr:         "0.0.0.0" + port,
+		Handler:      nil,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 	fmt.Println("Сайт запущен: http://localhost" + port)
-	if err:=srv.ListenAndServe();err!=nil{
-		fmt.Println ("Ошибка сервера:", err)
+	if err := srv.ListenAndServe(); err != nil {
+		fmt.Println("Ошибка сервера:", err)
 	}
 }
 
@@ -99,78 +98,76 @@ func handleLogin(w http.ResponseWriter, r *http.Request) { //обработчи�
 	err := json.NewDecoder(r.Body).Decode(&req)
 
 	if err != nil {
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusBadRequest)
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "success": false,
-        "error": "Ошибка чтения запроса",
-    })
-    return
-}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Ошибка чтения запроса",
+		})
+		return
+	}
 
 	loginMutex.Lock()
-    if blockTime, exists := loginBlocked[req.Username]; exists {
-        if time.Now().Before(blockTime) {
-            loginMutex.Unlock()
-            w.Header().Set("Content-Type", "application/json")
-            w.WriteHeader(http.StatusTooManyRequests)
-            json.NewEncoder(w).Encode(map[string]interface{}{
-                "success": false,
-                "error": "Слишком много попыток. Попробуйте через 5 минут",
-            })
-            return
-        }
-        delete(loginBlocked, req.Username)
-        delete(loginAttempts, req.Username)
-    }
-    loginMutex.Unlock()
-
+	if blockTime, exists := loginBlocked[req.Username]; exists {
+		if time.Now().Before(blockTime) {
+			loginMutex.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   "Слишком много попыток. Попробуйте через 5 минут",
+			})
+			return
+		}
+		delete(loginBlocked, req.Username)
+		delete(loginAttempts, req.Username)
+	}
+	loginMutex.Unlock()
 
 	safeUsername, err := safety.SanitizeAndValidateUser(req.Username)
-    if err != nil {
-        w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(map[string]interface{}{
-            "success": false,
-            "error": "Некорректное имя пользователя",
-        })
-        return
-    }
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Некорректное имя пользователя",
+		})
+		return
+	}
 
 	ok := database.CheckUser(safeUsername, req.Password)
 
-    if ok {
-        loginMutex.Lock() //успешный-сброс
-        delete(loginAttempts, req.Username)
-        delete(loginBlocked, req.Username)
-        loginMutex.Unlock()
+	if ok {
+		loginMutex.Lock() //успешный-сброс
+		delete(loginAttempts, req.Username)
+		delete(loginBlocked, req.Username)
+		loginMutex.Unlock()
 
-        token, err := auth.MakeToken(safeUsername)
-        if err != nil {
-            http.Error(w, "Ошибка создания токена", http.StatusInternalServerError)
-            return
-        }
+		token, err := auth.MakeToken(safeUsername)
+		if err != nil {
+			http.Error(w, "Ошибка создания токена", http.StatusInternalServerError)
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
-			"user": req.Username,
-			"token":token,
+			"user":    req.Username,
+			"token":   token,
 		})
 	} else {
 		loginMutex.Lock() //неудачный вход
-        loginAttempts[req.Username]++
-        if loginAttempts[req.Username] >= 5 {
-            loginBlocked[req.Username] = time.Now().Add(5 * time.Minute)
-        }
-        loginMutex.Unlock()
-
+		loginAttempts[req.Username]++
+		if loginAttempts[req.Username] >= 5 {
+			loginBlocked[req.Username] = time.Now().Add(5 * time.Minute)
+		}
+		loginMutex.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"error": "Неверный логин или пароль",
+			"error":   "Неверный логин или пароль",
 		})
 	}
 }
@@ -188,22 +185,21 @@ func handleRegister(w http.ResponseWriter, r *http.Request) { // обработ�
 	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 	err := json.NewDecoder(r.Body).Decode(&req)
 
-	
 	if err != nil {
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusBadRequest)
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "success": false,
-        "error": "Ошибка чтения запроса",
-    })
-    return
-}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Ошибка чтения запроса",
+		})
+		return
+	}
 
 	safeUsername, err := safety.SanitizeAndValidateUser(req.Username)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	if len(req.Password) < 6 {
 		http.Error(w, "Пароль должен быть не менее 6 символов", http.StatusBadRequest)
@@ -218,20 +214,20 @@ func handleRegister(w http.ResponseWriter, r *http.Request) { // обработ�
 		}
 	}
 
-    err = database.AddUser(safeUsername, req.Password)
+	err = database.AddUser(safeUsername, req.Password)
 	if err != nil {
 		http.Error(w, "Пользователь уже существует", http.StatusConflict)
 		return
 	}
 
-    userDir := filepath.Join("docs", safeUsername)
+	userDir := filepath.Join("docs", safeUsername)
 	os.MkdirAll(userDir, 0755)
 	fmt.Println("Папка создана:", userDir)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"user": safeUsername,
+		"user":    safeUsername,
 	})
 }
 
@@ -262,14 +258,14 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusBadRequest)
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "success": false,
-        "error": "Ошибка чтения запроса",
-    })
-    return
-}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Ошибка чтения запроса",
+		})
+		return
+	}
 
 	if req.Query == "" {
 		http.Error(w, "Пустой вопрос", http.StatusBadRequest)
@@ -277,73 +273,73 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 	}
 
 	userID := username
-    
+
 	chatMutex.Lock()
 	if chatHistory[userID] == nil {
 		chatHistory[userID] = []map[string]string{}
 	}
-    chatHistory[userID] = append(chatHistory[userID], map[string]string{
-    "role":"user",
-    "content": req.Query,
-})
-chatMutex.Unlock()
+	chatHistory[userID] = append(chatHistory[userID], map[string]string{
+		"role":    "user",
+		"content": req.Query,
+	})
+	chatMutex.Unlock()
 
-chatMutex.RLock()
-history := chatHistory[userID]
-chatMutex.RUnlock()
+	chatMutex.RLock()
+	history := chatHistory[userID]
+	chatMutex.RUnlock()
 
-texts, docs, scores, answer, pages, chunkIDs, _, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history, vectorClientGlobal)
+	texts, docs, scores, answer, pages, chunkIDs, _, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history, vectorClientGlobal)
 	sources := []map[string]interface{}{}
 	for i := 0; i < len(texts); i++ {
 		sources = append(sources, map[string]interface{}{
-			"doc_id": docs[i],
-			"score": scores[i],
-			"page": pages[i],
+			"doc_id":   docs[i],
+			"score":    scores[i],
+			"page":     pages[i],
 			"chunk_id": chunkIDs[i],
 		})
 	}
 
 	chatMutex.Lock()
-    chatHistory[userID] = append(chatHistory[userID], map[string]string{
-    "role": "assistant",
-    "content": answer,
-})
-chatMutex.Unlock()
+	chatHistory[userID] = append(chatHistory[userID], map[string]string{
+		"role":    "assistant",
+		"content": answer,
+	})
+	chatMutex.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"answer": answer,
+		"answer":  answer,
 		"sources": sources,
 		"timings": timings,
 	})
 }
 func handleHealth(w http.ResponseWriter, r *http.Request) {
-    authHeader := r.Header.Get("Authorization") //проверка токена
-    if authHeader == "" {
-        http.Error(w, "Требуется авторизация", http.StatusUnauthorized)
-        return
-    }
+	authHeader := r.Header.Get("Authorization") //проверка токена
+	if authHeader == "" {
+		http.Error(w, "Требуется авторизация", http.StatusUnauthorized)
+		return
+	}
 
-    tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-    _, err := auth.CheckToken(tokenString)
-    if err != nil {
-        http.Error(w, "Неверный токен", http.StatusUnauthorized)
-        return
-    }
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	_, err := auth.CheckToken(tokenString)
+	if err != nil {
+		http.Error(w, "Неверный токен", http.StatusUnauthorized)
+		return
+	}
 
-    client, err := vector.NewQdrantClient()  //проверка бд
-    if err != nil {
-        http.Error(w, "Qdrant недоступен", http.StatusServiceUnavailable)
-        return
-    }
-    if err := client.Ping(context.Background()); err != nil {
-        http.Error(w, "Qdrant не отвечает", http.StatusServiceUnavailable)
-        return
-    }
+	client, err := vector.NewQdrantClient() //проверка бд
+	if err != nil {
+		http.Error(w, "Qdrant недоступен", http.StatusServiceUnavailable)
+		return
+	}
+	if err := client.Ping(context.Background()); err != nil {
+		http.Error(w, "Qdrant не отвечает", http.StatusServiceUnavailable)
+		return
+	}
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]string{
-        "status": "ok",
-        "qdrant": "connected",
-    })
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "ok",
+		"qdrant": "connected",
+	})
 }

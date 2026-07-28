@@ -1,34 +1,34 @@
 package indexer
 
 import (
+	"context"
 	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
 	"docsearch/internal/chunk"
 	"docsearch/internal/config"
 	"docsearch/internal/corpus"
 	"docsearch/internal/embed"
 	"docsearch/internal/vector"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"github.com/google/uuid"
-	"context"
+	"os"
+	"path/filepath"
 )
 
 type Indexer struct { //структура индексации
-	Config *config.Config
+	Config       *config.Config
 	VectorClient vector.VectorStore
-	IndexPath string
-	UserID string
+	IndexPath    string
+	UserID       string
 }
 
 func NewIndexer(cfg *config.Config, vc vector.VectorStore, userID string) *Indexer { //новый индексер
 	return &Indexer{
-		Config: cfg,
+		Config:       cfg,
 		VectorClient: vc,
-		IndexPath: "./.docsearch_index_" + userID + ".json",
-		UserID: userID,
+		IndexPath:    "./.docsearch_index_" + userID + ".json",
+		UserID:       userID,
 	}
 }
 
@@ -54,32 +54,32 @@ func (i *Indexer) Index(ctx context.Context) error {
 
 	if len(docs) == 0 {
 		fmt.Printf("В папке %s нет документов\n", userDocsPath)
-		
-		entries,err:=os.ReadDir(userDocsPath)  // проверка что в папке есть файлы
-		if err!=nil{
-			fmt.Println("Не удалось проверить папку:",err)
-		}else if len(entries)==0{
+
+		entries, err := os.ReadDir(userDocsPath) // проверка что в папке есть файлы
+		if err != nil {
+			fmt.Println("Не удалось проверить папку:", err)
+		} else if len(entries) == 0 {
 			fmt.Println("Папка пуста. Положите документы в:", userDocsPath)
-		}else {
+		} else {
 			fmt.Printf("В папке есть файлы, но они не подходят по формату.\n")
 			fmt.Printf("Поддерживаются форматы: %v\n", i.Config.Corpus.Formats)
 			fmt.Println("Проверьте расширения файлов (.md, .txt, .pdf, .html)")
 		}
-		
+
 		i.deleteAllUserDocs(ctx)
 		return nil
 	}
 
-	old := map[string]string{}           // читаю старые хеши из файла
-	data, _ := os.ReadFile(i.IndexPath)  
+	old := map[string]string{} // читаю старые хеши из файла
+	data, _ := os.ReadFile(i.IndexPath)
 	json.Unmarshal(data, &old)
 
 	for _, doc := range docs {
-		hash := hashText(doc, i.Config) 
+		hash := hashText(doc, i.Config)
 
 		if old[doc.Name] != hash { // если хеш изменился или документа не было индексирую
 			fmt.Println("Индексирую:", doc.Name)
-			i.deleteDoc(ctx, doc.Name) 
+			i.deleteDoc(ctx, doc.Name)
 
 			err := i.saveDoc(ctx, doc)
 			if err != nil {
@@ -109,10 +109,10 @@ func (i *Indexer) Index(ctx context.Context) error {
 	}
 
 	data, _ = json.MarshalIndent(old, "", "  ")
-	err= os.WriteFile(i.IndexPath, data, 0644)
+	err = os.WriteFile(i.IndexPath, data, 0644)
 	if err != nil {
-    fmt.Printf("Предупреждение: не удалось сохранить индекс: %v\n", err)
-}
+		fmt.Printf("Предупреждение: не удалось сохранить индекс: %v\n", err)
+	}
 
 	fmt.Println("Индексация завершена")
 	return nil
@@ -124,7 +124,7 @@ func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
 	fmt.Printf("Документ: %s, страниц: %d\n", doc.Name, len(doc.Pages))
 
 	for idx, ch := range chunks {
-		
+
 		page := 1
 		if doc.Pages != nil && len(doc.Pages) > 0 {
 
@@ -149,18 +149,18 @@ func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
 
 		id := uuid.New().String()
 		data := map[string]interface{}{
-			"doc_id": doc.Name,
-			"chunk_text": ch.Text,
-			"section": ch.Section,
-			"level": ch.Level,
+			"doc_id":      doc.Name,
+			"chunk_text":  ch.Text,
+			"section":     ch.Section,
+			"level":       ch.Level,
 			"token_count": ch.TokenCount,
-			"user_id": i.UserID,
-			"page": page,
-			"chunk_id": id,
+			"user_id":     i.UserID,
+			"page":        page,
+			"chunk_id":    id,
 		}
 
 		err = i.VectorClient.Save(ctx, vector.CollectionName, id, vec32, data)
-		if err!= nil {
+		if err != nil {
 			fmt.Println("Ошибка сохранения:", err)
 			return err
 		}
@@ -170,25 +170,25 @@ func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
 
 func (i *Indexer) deleteDoc(ctx context.Context, name string) { // удаляю все чанки документа из бд
 	filter := map[string]interface{}{
-        "must": []map[string]interface{}{
-            {"key": "doc_id", "match": map[string]interface{}{"value": name}},
-            {"key": "user_id", "match": map[string]interface{}{"value": i.UserID}},
-        },
-    }
-    i.VectorClient.Delete(ctx, vector.CollectionName, filter)
+		"must": []map[string]interface{}{
+			{"key": "doc_id", "match": map[string]interface{}{"value": name}},
+			{"key": "user_id", "match": map[string]interface{}{"value": i.UserID}},
+		},
+	}
+	i.VectorClient.Delete(ctx, vector.CollectionName, filter)
 }
 
 func hashText(doc corpus.Document, cfg *config.Config) string { // считаю хеш текста
-	data:=doc.Text + //текст с настройками 
-	    fmt.Sprintf("|%d|", cfg.Chunking.MaxTokens) +
-        fmt.Sprintf("%d|", cfg.Chunking.OverlapTokens) +
-        cfg.Embeddings.Model + "|" +
-        fmt.Sprintf("%d|", cfg.Embeddings.VectorSize) +
-        cfg.LLM.Model + "|" +
-        fmt.Sprintf("%d", cfg.Retrieval.TopK)
+	data := doc.Text + //текст с настройками
+		fmt.Sprintf("|%d|", cfg.Chunking.MaxTokens) +
+		fmt.Sprintf("%d|", cfg.Chunking.OverlapTokens) +
+		cfg.Embeddings.Model + "|" +
+		fmt.Sprintf("%d|", cfg.Embeddings.VectorSize) +
+		cfg.LLM.Model + "|" +
+		fmt.Sprintf("%d", cfg.Retrieval.TopK)
 
-    h := sha256.Sum256([]byte(data))
-    return hex.EncodeToString(h[:])
+	h := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(h[:])
 }
 
 func (i *Indexer) deleteAllUserDocs(ctx context.Context) {
@@ -203,7 +203,7 @@ func (i *Indexer) deleteAllUserDocs(ctx context.Context) {
 		},
 	}
 	i.VectorClient.Delete(ctx, vector.CollectionName, filter)
-	
+
 	fmt.Printf("Все документы пользователя %s удалены\n", i.UserID)
 }
 

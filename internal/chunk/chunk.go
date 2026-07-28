@@ -1,37 +1,39 @@
 package chunk
-type Chunk struct{
-	Text string
+
+type Chunk struct {
+	Text     string
 	Document string
 }
-	func SplitText(text string,size int,overlap int,docName string)[]Chunk{ //Разбиваем текст на куски
-		var result[]Chunk
 
-		if text==""{ //если пустой,меньше 0 текст-на выход
-			return result
-		}
-		if size<=0{
-				return result
-		}
-		if len(text)<=size{
-			result=append(result,Chunk{Text:text,Document:docName})
-			return result
-		}
-		start:=0
-			 
-		for start < len(text){
-				end:=start+size
+func SplitText(text string, size int, overlap int, docName string) []Chunk { //Разбиваем текст на куски
+	var result []Chunk
 
-			if end>len(text) { //обрезка при выходе за границу
-				end=len(text)
-			}
-			part:=text[start:end]
-			result=append(result,Chunk{Text:part,Document:docName})
+	if text == "" { //если пустой,меньше 0 текст-на выход
+		return result
+	}
+	if size <= 0 {
+		return result
+	}
+	if len(text) <= size {
+		result = append(result, Chunk{Text: text, Document: docName})
+		return result
+	}
+	start := 0
 
-			start=start+size-overlap
-			if start>=len(text){
-				break
-			}
-	
+	for start < len(text) {
+		end := start + size
+
+		if end > len(text) { //обрезка при выходе за границу
+			end = len(text)
+		}
+		part := text[start:end]
+		result = append(result, Chunk{Text: part, Document: docName})
+
+		start = start + size - overlap
+		if start >= len(text) {
+			break
+		}
+
 	}
 	return result
 }
