@@ -172,6 +172,12 @@ func main() {
         fmt.Println("Пример: docsearch.exe ask \"Что такое RAG?\" --user Валерия")
         return
      }
+     safeUser,err:=safety.SanitizeAndValidateUser(userID)
+     if err!=nil{
+        fmt.Println("Ошибка: неверное имя пользователя:", err)
+        return
+     }
+     userID=safeUser
 
         startTime := time.Now()
 

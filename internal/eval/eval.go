@@ -7,8 +7,8 @@ import (
     "docsearch/internal/config"
     "docsearch/internal/rag"
     "context"
-    
-    
+    "docsearch/internal/safety"
+ 
 )
 
 type EvalQuestion struct {
@@ -45,6 +45,13 @@ func RunEval(cfg *config.Config) {
     fmt.Println("Пример: .\\docsearch.exe eval --user Екатерина")
     return
 }
+safeUser,err:=safety.SanitizeAndValidateUser(userForEval)
+if err!=nil{
+    fmt.Printf("Ошибка: неверное имя пользователя: %v\n", err)
+    return
+}
+userForEval=safeUser
+
 userDir := "docs/" + userForEval  // проверка существует ли папка пользователя
 if _, err := os.Stat(userDir); os.IsNotExist(err) {
     fmt.Printf("Ошибка: пользователь %s не существует или нет документов\n", userForEval)

@@ -57,7 +57,7 @@ func TestContextCancel(t *testing.T) { //тест на отмену контек
     ctx, cancel := context.WithCancel(context.Background())
     cancel() 
 
-   _, _, _, _, _, _, _ = Ask(ctx, cfg, "Что такое?", "test", []map[string]string{})
+   _, _, _, _, _, _, _ = Ask(ctx, cfg, "Что такое?", "test", []map[string]string{}, nil)
     t.Log("Тест на отмену контекста пройден")
 }
 

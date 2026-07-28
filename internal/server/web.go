@@ -88,11 +88,20 @@ func handleLogin(w http.ResponseWriter, r *http.Request) { //обработчи�
 		http.Error(w, "Ошибка чтения", http.StatusBadRequest)
 		return
 	}
+	safeUsername, err := safety.SanitizeAndValidateUser(req.Username)
+    if err != nil {
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "success": false,
+            "error":   "Некорректное имя пользователя",
+        })
+        return
+    }
 
-	ok := database.CheckUser(req.Username, req.Password)
-
+	ok := database.CheckUser(safeUsername, req.Password)
 	if ok {
-		token, err := auth.MakeToken(req.Username)
+    token, err := auth.MakeToken(safeUsername)
+
 		if err != nil {
 			http.Error(w, "Ошибка создания токена", http.StatusInternalServerError)
 			return
