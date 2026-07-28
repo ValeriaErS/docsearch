@@ -15,6 +15,7 @@ import (
 	"docsearch/internal/safety"
 	"docsearch/internal/vector"
 	"context" 
+	"time"
 	 
 )
 
@@ -48,8 +49,17 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 	http.HandleFunc("/health", handleHealth)
 	
 
+	srv:=&http.Server{
+		Addr: "0.0.0.0"+port,
+		Handler: nil,
+		ReadTimeout:10 * time.Second,
+		WriteTimeout:30 * time.Second,
+		IdleTimeout:120 * time.Second,
+	}
 	fmt.Println("Сайт запущен: http://localhost" + port)
-	http.ListenAndServe("0.0.0.0"+port, nil)
+	if err:=srv.ListenAndServe();err!=nil{
+		fmt.Println ("Ошибка сервера:", err)
+	}
 }
 
 func showIndex(w http.ResponseWriter, r *http.Request) {
@@ -82,8 +92,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) { //обработчи�
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-
+	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024) // ограничиваюразмер тела запроса (1 MB)
 	err := json.NewDecoder(r.Body).Decode(&req)
+
 	if err != nil {
 		http.Error(w, "Ошибка чтения", http.StatusBadRequest)
 		return
@@ -115,6 +126,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) { //обработчи�
 		})
 	} else {
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
 			"error": "Неверный логин или пароль",
@@ -132,8 +144,10 @@ func handleRegister(w http.ResponseWriter, r *http.Request) { // обработ�
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-
+	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 	err := json.NewDecoder(r.Body).Decode(&req)
+
+	
 	if err != nil {
 		http.Error(w, "Ошибка чтения", http.StatusBadRequest)
 		return
@@ -197,6 +211,8 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 	var req struct {
 		Query string `json:"query"`
 	}
+	r.Body=http.MaxBytesReader(w, r.Body, 1024*1024)  
+	err=json.NewDecoder(r.Body).Decode(&req)
 
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
