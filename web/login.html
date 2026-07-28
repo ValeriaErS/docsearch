@@ -290,60 +290,74 @@
     </div>
 
     <script>
+    document.addEventListener('DOMContentLoaded', function() {
         const loginInput = document.getElementById('loginInput');
         const passwordInput = document.getElementById('passwordInput');
         const loginBtn = document.getElementById('loginBtn');
         const loginError = document.getElementById('loginError');
-        const registerLink = document.getElementById('registerLink');
 
-        loginBtn.addEventListener('click', async function() {
-        const username = loginInput.value.trim();
-        const password = passwordInput.value.trim();
+        if (loginBtn) {
+            loginBtn.addEventListener('click', async function() {
+                const username = loginInput ? loginInput.value.trim() : '';
+                const password = passwordInput ? passwordInput.value.trim() : '';
 
-        if (!username || !password) {
-            loginError.textContent = 'Заполните все поля';
-            loginError.classList.add('show');
-            return;
+                if (!username || !password) {
+                    if (loginError) {
+                        loginError.textContent = 'Заполните все поля';
+                        loginError.classList.add('show');
+                    }
+                    return;
+                }
+
+                try {
+                    const res = await fetch('/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+
+                    const data = await res.json();
+
+                    if (data.success) {
+                        localStorage.setItem('token', data.token);
+                        localStorage.setItem('user', data.user);
+                        window.location.href = '/chat.html';
+                    } else {
+                        if (loginError) {
+                            loginError.textContent = data.error || 'Неверный логин или пароль';
+                            loginError.classList.add('show');
+                        }
+                    }
+                } catch (e) {
+                    if (loginError) {
+                        loginError.textContent = 'Ошибка соединения с сервером';
+                        loginError.classList.add('show');
+                    }
+                }
+            });
         }
 
-        try {
-            const res = await fetch('/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+        if (loginInput) {
+            loginInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && loginBtn) loginBtn.click();
             });
+        }
 
-            const data = await res.json();
+        if (passwordInput) {
+            passwordInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && loginBtn) loginBtn.click();
+            });
+        }
 
-            if (data.success) {
-    
-                localStorage.setItem('token', data.token);     // сохраняю токен и имяВ localStorage
-                localStorage.setItem('user', data.user);
-
-                
-                window.location.href = '/chat.html';  // Переход в чат
-            } else {
-                loginError.textContent = data.error || 'Неверный логин или пароль';
-                loginError.classList.add('show');
-            }
-        } catch (e) {
-            loginError.textContent = 'Ошибка соединения с сервером';
-            loginError.classList.add('show');
+        const registerLink = document.querySelector('.register-text a');
+        if (registerLink) {
+            registerLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                alert('Регистрация скоро будет доступна!');
+            });
         }
     });
-                
-        loginInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') loginBtn.click();
-        });
-        passwordInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') loginBtn.click();
-        });
-
-        registerLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            alert('Регистрация скоро будет доступна!');
-        });
-    </script>
+</script>
 
 </body>
 </html>
