@@ -186,7 +186,7 @@ func main() {
     }
 
     if evalMode {
-        eval.RunEval(cfg, datasetPath)
+        eval.RunEval(cfg, datasetPath, sharedVectorClient)
         return
     }
 

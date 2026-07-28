@@ -29,10 +29,10 @@ type EvalResult struct {
     Success bool `json:"success"`
 }
 
-func RunEval(cfg *config.Config, datasetPath string) {
+func RunEval(cfg *config.Config, datasetPath string, vectorClient vector.VectorStore) {
     fmt.Println("Запуск")
     if datasetPath == "" {
-        datasetPath = "testdata/eval.json"
+        datasetPath = "testdata/control/questions.jsonl"
     }
 
     if cfg.LLM.Provider == "mock" {
@@ -69,23 +69,38 @@ if _, err := os.Stat(userDir); os.IsNotExist(err) {
 
     fmt.Printf("Пользователь: %s\n\n", userForEval)
 
-    data, err := os.ReadFile("testdata/eval.json")
-    if err != nil {
-        fmt.Println("Файл testdat/eval.json не найден")
-        return
-    }
+    
+   file, err := os.Open(datasetPath) //  JSONL
+   if err != nil {
+    fmt.Println("Ошибка открытия файла:", err)
+    return
+}
+defer file.Close()
 
-    var questions []EvalQuestion
-    err = json.Unmarshal(data, &questions)
-    if err != nil {
-        fmt.Println("Ошибка чтения eval.json:", err)
-        return
+var questions []EvalQuestion
+scanner := bufio.NewScanner(file)
+for scanner.Scan() {
+    line := strings.TrimSpace(scanner.Text())
+    if line == "" {
+        continue
     }
+    var q EvalQuestion
+    if err := json.Unmarshal([]byte(line), &q); err != nil {
+        fmt.Printf("Ошибка парсинга строки: %v\n", err)
+        continue
+    }
+    questions = append(questions, q)
+}
 
-    if len(questions) == 0 {
-        fmt.Println("Нет вопросов для оценки")
-        return
-    }
+if err := scanner.Err(); err != nil {
+    fmt.Println("Ошибка чтения файла:", err)
+    return
+}
+
+if len(questions) == 0 {
+    fmt.Println("Нет вопросов для оценки")
+    return
+}
 
     fmt.Printf("Найдено %d вопросов\n\n", len(questions))
 
@@ -95,7 +110,7 @@ if _, err := os.Stat(userDir); os.IsNotExist(err) {
     for i, q := range questions {
         fmt.Printf("--- Вопрос %d: \"%s\" ---\n", i+1, q.Query)
 
-      texts, docs, scores, answer, pages, _, _, _ := rag.Ask(context.Background(), *cfg, q.Query, userForEval, []map[string]string{}, nil)
+      texts, docs, scores, answer, pages, _, _, _ := rag.Ask(context.Background(), *cfg, q.Query, userForEval, []map[string]string{}, vectorClient)
         fmt.Printf("Ожидаемые документы: %v\n", q.ExpectedDocs)
         fmt.Printf("Найденные документы: %v\n", docs)
         fmt.Printf("Найдено текстов: %d\n", len(texts))
@@ -283,8 +298,18 @@ if err := scanner.Err(); err != nil {
             if !ok {
                 continue
             }
-            texts = append(texts, payload["chunk_text"].(string))
-            docs = append(docs, payload["doc_id"].(string))
+            chunkText, ok := payload["chunk_text"].(string)
+            if !ok {
+                continue
+            }
+            docID, ok := payload["doc_id"].(string)
+            if !ok {
+                continue
+            }
+
+            texts = append(texts, chunkText)
+            docs = append(docs, docID)
+
             vecData, ok := point["vector"].([]float32)
             if !ok {
                 continue
@@ -309,7 +334,7 @@ if err := scanner.Err(); err != nil {
             continue
         }
 
-        fmt.Printf("  Точный поиск:\n")
+        fmt.Printf("Точный поиск:\n")
         if len(exactDocs) > 0 {
             for i, doc := range exactDocs {
                 fmt.Printf("%d. %s (оценка: %.4f)\n", i+1, doc, exactScores[i])
@@ -321,8 +346,15 @@ if err := scanner.Err(); err != nil {
         fmt.Printf("ANN поиск:\n")
         if len(annResults) > 0 {
             for i, r := range annResults {
-                payload, _ := r["payload"].(map[string]interface{})
-                docID := payload["doc_id"].(string)
+    
+                payload, ok := r["payload"].(map[string]interface{})
+                if !ok {
+                    continue
+                }
+                docID, ok := payload["doc_id"].(string)
+                if !ok {
+                    continue
+                }
                 fmt.Printf("%d. %s (оценка: %.4f)\n", i+1, docID, r["score"])
             }
         } else {
@@ -330,19 +362,23 @@ if err := scanner.Err(); err != nil {
         }
 
         if len(exactDocs) > 0 && len(annResults) > 0 {
-            if exactDocs[0] == annResults[0]["payload"].(map[string]interface{})["doc_id"].(string) {
-                fmt.Println("ANN и точный поиск дали одинаковый первый результат")
-            } else {
-                fmt.Printf("Результаты различаются:\n")
-                fmt.Printf("ANN: %s\n", annResults[0]["payload"].(map[string]interface{})["doc_id"].(string))
-                fmt.Printf("Точный: %s\n", exactDocs[0])
+            
+            annPayload, ok := annResults[0]["payload"].(map[string]interface{})
+            if ok {
+                annDocID, ok := annPayload["doc_id"].(string)
+                if ok && exactDocs[0] == annDocID {
+                    fmt.Println("ANN и точный поиск дали одинаковый первый результат")
+                } else {
+                    fmt.Printf("Результаты различаются:\n")
+                    fmt.Printf("ANN: %s\n", annDocID)
+                    fmt.Printf("Точный: %s\n", exactDocs[0])
+                }
             }
         }
 
         fmt.Println()
     }
 
-    // Итог
     fmt.Println("Вывод ")
     fmt.Println("ANN работает быстрее, но может давать небольшую погрешность")
     fmt.Println("Точный поиск даёт 100% точность, но медленнее")

@@ -16,6 +16,7 @@ demo:
 
 eval:
 	go run ./cmd/docsearch eval --user demo
+	go run ./cmd/docsearch eval --user demo --config configs/config.mock.yml
 
 clean:
 	del /f /q bin\docsearch.exe 2>nul
