@@ -75,17 +75,21 @@ if ext==".pdf"{
 			}
 
 	text=string(data)
-	pages = nil
-}
+	if ext == ".html" {
+                text = RemoveHTMLTags(text)
+            }
 
-doc:=Document{  // создаю документ и нормализую текст
-	Name:name,
-	Text:NormalizeNext(text),
-	Pages: pages,
+            pages = nil
+        }
+		
+		doc:=Document{  // создаю документ и нормализую текст
+	    Name:name,
+	    Text:NormalizeNext(text),
+	    Pages: pages,
 }
-docs=append(docs,doc)
+    docs=append(docs,doc)
 
 }
-return docs,nil
+    return docs,nil
 }
 

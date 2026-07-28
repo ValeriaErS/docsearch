@@ -95,7 +95,11 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
         overlapTokens=maxTokens/4
     }
     
-    enc, _ := tiktoken.GetEncoding("cl100k_base")
+    enc, err := tiktoken.GetEncoding("cl100k_base")
+    if err != nil {
+        return []IntelligentChunk{} // нет энкодер, то пустой результат
+}
+
     var chunks []IntelligentChunk
 
     sections := parseSections(text)

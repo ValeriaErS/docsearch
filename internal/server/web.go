@@ -18,6 +18,9 @@ import (
 	"time"
 	 
 )
+var loginAttempts=make(map[string]int)
+var loginBlocked=make(map[string]time.Time)
+var loginMutex sync.Mutex
 
 var chatHistory = make(map[string][]map[string]string)
 var chatMutex sync.RWMutex
@@ -96,27 +99,57 @@ func handleLogin(w http.ResponseWriter, r *http.Request) { //обработчи�
 	err := json.NewDecoder(r.Body).Decode(&req)
 
 	if err != nil {
-		http.Error(w, "Ошибка чтения", http.StatusBadRequest)
-		return
-	}
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusBadRequest)
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "success": false,
+        "error": "Ошибка чтения запроса",
+    })
+    return
+}
+
+	loginMutex.Lock()
+    if blockTime, exists := loginBlocked[req.Username]; exists {
+        if time.Now().Before(blockTime) {
+            loginMutex.Unlock()
+            w.Header().Set("Content-Type", "application/json")
+            w.WriteHeader(http.StatusTooManyRequests)
+            json.NewEncoder(w).Encode(map[string]interface{}{
+                "success": false,
+                "error": "Слишком много попыток. Попробуйте через 5 минут",
+            })
+            return
+        }
+        delete(loginBlocked, req.Username)
+        delete(loginAttempts, req.Username)
+    }
+    loginMutex.Unlock()
+
+
 	safeUsername, err := safety.SanitizeAndValidateUser(req.Username)
     if err != nil {
         w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
         json.NewEncoder(w).Encode(map[string]interface{}{
             "success": false,
-            "error":   "Некорректное имя пользователя",
+            "error": "Некорректное имя пользователя",
         })
         return
     }
 
 	ok := database.CheckUser(safeUsername, req.Password)
-	if ok {
-    token, err := auth.MakeToken(safeUsername)
 
-		if err != nil {
-			http.Error(w, "Ошибка создания токена", http.StatusInternalServerError)
-			return
-		}
+    if ok {
+        loginMutex.Lock() //успешный-сброс
+        delete(loginAttempts, req.Username)
+        delete(loginBlocked, req.Username)
+        loginMutex.Unlock()
+
+        token, err := auth.MakeToken(safeUsername)
+        if err != nil {
+            http.Error(w, "Ошибка создания токена", http.StatusInternalServerError)
+            return
+        }
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -125,6 +158,14 @@ func handleLogin(w http.ResponseWriter, r *http.Request) { //обработчи�
 			"token":token,
 		})
 	} else {
+		loginMutex.Lock() //неудачный вход
+        loginAttempts[req.Username]++
+        if loginAttempts[req.Username] >= 5 {
+            loginBlocked[req.Username] = time.Now().Add(5 * time.Minute)
+        }
+        loginMutex.Unlock()
+
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -149,9 +190,15 @@ func handleRegister(w http.ResponseWriter, r *http.Request) { // обработ�
 
 	
 	if err != nil {
-		http.Error(w, "Ошибка чтения", http.StatusBadRequest)
-		return
-	}
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusBadRequest)
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "success": false,
+        "error": "Ошибка чтения запроса",
+    })
+    return
+}
+
 	safeUsername, err := safety.SanitizeAndValidateUser(req.Username)
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)
@@ -211,14 +258,18 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 	var req struct {
 		Query string `json:"query"`
 	}
-	r.Body=http.MaxBytesReader(w, r.Body, 1024*1024)  
-	err=json.NewDecoder(r.Body).Decode(&req)
-
+	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, "Ошибка чтения", http.StatusBadRequest)
-		return
-	}
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusBadRequest)
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "success": false,
+        "error": "Ошибка чтения запроса",
+    })
+    return
+}
 
 	if req.Query == "" {
 		http.Error(w, "Пустой вопрос", http.StatusBadRequest)
@@ -241,13 +292,14 @@ chatMutex.RLock()
 history := chatHistory[userID]
 chatMutex.RUnlock()
 
-texts, docs, scores, answer, pages, _, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history, vectorClientGlobal)
+texts, docs, scores, answer, pages, chunkIDs, _, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history, vectorClientGlobal)
 	sources := []map[string]interface{}{}
 	for i := 0; i < len(texts); i++ {
 		sources = append(sources, map[string]interface{}{
 			"doc_id": docs[i],
 			"score": scores[i],
 			"page": pages[i],
+			"chunk_id": chunkIDs[i],
 		})
 	}
 
@@ -265,17 +317,31 @@ chatMutex.Unlock()
 		"timings": timings,
 	})
 }
-func handleHealth(w http.ResponseWriter,r *http.Request){
-		client,err:=vector.NewQdrantClient()
-		if err!=nil{
-			http.Error(w,"Qdrant недоступен", http.StatusServiceUnavailable)
-			return
-		}
-		if err:=client.Ping(context.Background());err!=nil{
-			 http.Error(w, "Qdrant не отвечает", http.StatusServiceUnavailable)
-			 return
-		}
-		 w.Header().Set("Content-Type", "application/json")
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+    authHeader := r.Header.Get("Authorization") //проверка токена
+    if authHeader == "" {
+        http.Error(w, "Требуется авторизация", http.StatusUnauthorized)
+        return
+    }
+
+    tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+    _, err := auth.CheckToken(tokenString)
+    if err != nil {
+        http.Error(w, "Неверный токен", http.StatusUnauthorized)
+        return
+    }
+
+    client, err := vector.NewQdrantClient()  //проверка бд
+    if err != nil {
+        http.Error(w, "Qdrant недоступен", http.StatusServiceUnavailable)
+        return
+    }
+    if err := client.Ping(context.Background()); err != nil {
+        http.Error(w, "Qdrant не отвечает", http.StatusServiceUnavailable)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(map[string]string{
         "status": "ok",
         "qdrant": "connected",

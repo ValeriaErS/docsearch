@@ -8,4 +8,5 @@ type VectorStore interface {
     Delete(ctx context.Context, name string, filter map[string]interface{}) error
     CreateCollection(ctx context.Context, name string) error
     Ping(ctx context.Context) error
+    GetAllVectors(ctx context.Context, name string, userID string) ([]map[string]interface{}, error)
 }

@@ -8,6 +8,11 @@ import (
     "docsearch/internal/rag"
     "context"
     "docsearch/internal/safety"
+    "docsearch/internal/vector"   
+    "docsearch/internal/embed"  
+    "docsearch/internal/retrieve"
+    "bufio"
+    "strings"
  
 )
 
@@ -24,8 +29,11 @@ type EvalResult struct {
     Success bool `json:"success"`
 }
 
-func RunEval(cfg *config.Config) {
+func RunEval(cfg *config.Config, datasetPath string) {
     fmt.Println("Запуск")
+    if datasetPath == "" {
+        datasetPath = "testdata/eval.json"
+    }
 
     if cfg.LLM.Provider == "mock" {
         fmt.Println("Внимание: eval запущен в mock-режиме")
@@ -87,7 +95,7 @@ if _, err := os.Stat(userDir); os.IsNotExist(err) {
     for i, q := range questions {
         fmt.Printf("--- Вопрос %d: \"%s\" ---\n", i+1, q.Query)
 
-      texts, docs, scores, answer, pages, _, _ := rag.Ask(context.Background(), *cfg, q.Query, userForEval, []map[string]string{}, nil)
+      texts, docs, scores, answer, pages, _, _, _ := rag.Ask(context.Background(), *cfg, q.Query, userForEval, []map[string]string{}, nil)
         fmt.Printf("Ожидаемые документы: %v\n", q.ExpectedDocs)
         fmt.Printf("Найденные документы: %v\n", docs)
         fmt.Printf("Найдено текстов: %d\n", len(texts))
@@ -207,4 +215,136 @@ if precision+recall > 0 {
     }
     fmt.Printf("%d | %.0f%% | %.0f%% | %.0f%%\n", i+1, r.Recall*100, precision*100, f1*100)
 }
+}
+
+func CompareANNvsExact(cfg *config.Config, userID string, vectorClient vector.VectorStore) {
+    fmt.Println("\n Сравнение ANN и Точный поиск")
+
+    file, err := os.Open("testdata/control/questions.jsonl")
+if err != nil {
+    fmt.Println("Ошибка загрузки вопросов:", err)
+    return
+}
+defer file.Close()
+
+var questions []EvalQuestion
+scanner := bufio.NewScanner(file)
+for scanner.Scan() {
+    line := strings.TrimSpace(scanner.Text())
+    if line == "" {
+        continue
+    }
+    var q EvalQuestion
+    if err := json.Unmarshal([]byte(line), &q); err != nil {
+        fmt.Printf("Ошибка парсинга строки: %v\n", err)
+        continue
+    }
+    questions = append(questions, q)
+}
+
+if err := scanner.Err(); err != nil {
+    fmt.Println("Ошибка чтения файла:", err)
+    return
+}
+
+    allPoints, err := vectorClient.GetAllVectors(context.Background(), vector.CollectionName, userID) // все векторы пользователя из хранилища
+    if err != nil {
+        fmt.Println("Ошибка получения всех векторов:", err)
+        return
+    }
+
+    if len(allPoints) == 0 {
+        fmt.Println("Нет данных для пользователя", userID)
+        fmt.Println("Сначала проиндексируйте документы: docsearch.exe index --user", userID)
+        return
+    }
+
+    fmt.Printf("Найдено %d чанков для пользователя %s\n\n", len(allPoints), userID)
+
+    for _, q := range questions {
+        fmt.Printf("--- Вопрос: %s ---\n", q.Query)
+
+        vec, err := embed.GetEmbedding(context.Background(), q.Query, cfg)  //эмбеддинг вопроса
+        if err != nil {
+            fmt.Println("Ошибка эмбеддинга:", err)
+            continue
+        }
+
+        queryVec := make([]float64, len(vec))
+        for i, v := range vec {
+            queryVec[i] = v
+        }
+
+        texts := []string{}  // подготовка данных для точного поиска
+        docs := []string{}
+        vectors := [][]float64{}
+        for _, point := range allPoints {
+            payload, ok := point["payload"].(map[string]interface{})
+            if !ok {
+                continue
+            }
+            texts = append(texts, payload["chunk_text"].(string))
+            docs = append(docs, payload["doc_id"].(string))
+            vecData, ok := point["vector"].([]float32)
+            if !ok {
+                continue
+            }
+            vec64 := make([]float64, len(vecData))
+            for i, v := range vecData {
+                vec64[i] = float64(v)
+            }
+            vectors = append(vectors, vec64)
+        }
+
+        _, exactDocs, exactScores := retrieve.Search(texts, docs, vectors, queryVec, cfg.Retrieval.TopK)   // полный перебор
+
+        
+        vec32 := make([]float32, len(vec))  // ANN поиск
+        for i, v := range vec {
+            vec32[i] = float32(v)
+        }
+        annResults, err := vectorClient.Search(context.Background(), vector.CollectionName, vec32, cfg.Retrieval.TopK, userID)
+        if err != nil {
+            fmt.Println("Ошибка ANN поиска:", err)
+            continue
+        }
+
+        fmt.Printf("  Точный поиск:\n")
+        if len(exactDocs) > 0 {
+            for i, doc := range exactDocs {
+                fmt.Printf("%d. %s (оценка: %.4f)\n", i+1, doc, exactScores[i])
+            }
+        } else {
+            fmt.Println("Ничего не найдено")
+        }
+
+        fmt.Printf("ANN поиск:\n")
+        if len(annResults) > 0 {
+            for i, r := range annResults {
+                payload, _ := r["payload"].(map[string]interface{})
+                docID := payload["doc_id"].(string)
+                fmt.Printf("%d. %s (оценка: %.4f)\n", i+1, docID, r["score"])
+            }
+        } else {
+            fmt.Println("Ничего не найдено")
+        }
+
+        if len(exactDocs) > 0 && len(annResults) > 0 {
+            if exactDocs[0] == annResults[0]["payload"].(map[string]interface{})["doc_id"].(string) {
+                fmt.Println("ANN и точный поиск дали одинаковый первый результат")
+            } else {
+                fmt.Printf("Результаты различаются:\n")
+                fmt.Printf("ANN: %s\n", annResults[0]["payload"].(map[string]interface{})["doc_id"].(string))
+                fmt.Printf("Точный: %s\n", exactDocs[0])
+            }
+        }
+
+        fmt.Println()
+    }
+
+    // Итог
+    fmt.Println("Вывод ")
+    fmt.Println("ANN работает быстрее, но может давать небольшую погрешность")
+    fmt.Println("Точный поиск даёт 100% точность, но медленнее")
+    fmt.Println("Для больших корпусов рекомендуется использовать ANN")
 }

@@ -109,7 +109,10 @@ func (i *Indexer) Index(ctx context.Context) error {
 	}
 
 	data, _ = json.MarshalIndent(old, "", "  ")
-	os.WriteFile(i.IndexPath, data, 0644)
+	err= os.WriteFile(i.IndexPath, data, 0644)
+	if err != nil {
+    fmt.Printf("Предупреждение: не удалось сохранить индекс: %v\n", err)
+}
 
 	fmt.Println("Индексация завершена")
 	return nil
@@ -153,6 +156,7 @@ func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
 			"token_count": ch.TokenCount,
 			"user_id": i.UserID,
 			"page": page,
+			"chunk_id": id,
 		}
 
 		err = i.VectorClient.Save(ctx, vector.CollectionName, id, vec32, data)

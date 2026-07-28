@@ -248,10 +248,20 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
     }
     
     var lastErr error
+    
+    var bodyBytes []byte  //  сохртело для повторного использования
+    if req.Body!=nil{
+        bodyBytes, _=io.ReadAll(req.Body)
+        req.Body.Close()
+    }
+
     for attempt := 0; attempt < maxRetries; attempt++ {
         if attempt > 0 {
-            fmt.Printf("Повторная попытка %d из %d\n", attempt+1, maxRetries)
             time.Sleep(time.Duration(attempt) * time.Second) 
+
+            if len(bodyBytes)>0{  //пересоздаю тело
+                req.Body=io.NopCloser(bytes.NewReader(bodyBytes))
+            }
         }
         
         resp, err := client.Do(req)
@@ -266,7 +276,77 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
         
         body, _ := io.ReadAll(resp.Body)
         resp.Body.Close()
-        lastErr = fmt.Errorf("статус %d: %s", resp.StatusCode, string(body))
+
+        if resp.StatusCode==408 || resp.StatusCode==429 || resp.StatusCode>=500{
+             lastErr = fmt.Errorf("статус %d: %s", resp.StatusCode, string(body))
+             continue
+        }
+        return nil, fmt.Errorf("статус %d: %s", resp.StatusCode, string(body))
+        
     }
     return nil, fmt.Errorf("не удалось выполнить запрос после %d попыток: %w", maxRetries, lastErr)
+}
+
+func (q *QdrantClient) GetAllVectors(ctx context.Context, name string, userID string) ([]map[string]interface{}, error) { //все векторы из бд
+
+    d := map[string]interface{}{
+        "limit": 100,
+        "with_vector": true,
+        "with_payload": true,
+    }
+
+    if userID != "" {
+        d["filter"] = map[string]interface{}{
+            "must": []map[string]interface{}{
+                {
+                    "key": "user_id",
+                    "match": map[string]interface{}{
+                        "value": userID,
+                    },
+                },
+            },
+        }
+    }
+
+    j, err := json.Marshal(d)
+    if err != nil {
+        return nil, fmt.Errorf("ошибка маршалинга: %w", err)
+    }
+
+    req, err := http.NewRequestWithContext(ctx, "POST", q.url("/collections/"+name+"/points/scroll"), bytes.NewBuffer(j))
+    if err != nil {
+        return nil, fmt.Errorf("ошибка создания запроса: %w", err)
+    }
+    req.Header.Set("Content-Type", "application/json")
+
+    r, err := retryRequest(req, 3)
+    if err != nil {
+        return nil, fmt.Errorf("ошибка запроса к Qdrant: %w", err)
+    }
+    defer r.Body.Close()
+
+    var res struct {
+        Result struct {
+            Points []struct {
+                Id string `json:"id"`
+                Vector []float32 `json:"vector"`
+                Payload map[string]interface{} `json:"payload"`
+            } `json:"points"`
+        } `json:"result"`
+    }
+
+    if err := json.NewDecoder(r.Body).Decode(&res); err != nil {
+        return nil, fmt.Errorf("ошибка парсинга ответа: %w", err)
+    }
+
+    out := []map[string]interface{}{}
+    for _, point := range res.Result.Points {
+        out = append(out, map[string]interface{}{
+            "id": point.Id,
+            "vector": point.Vector,
+            "payload": point.Payload,
+        })
+    }
+
+    return out, nil
 }

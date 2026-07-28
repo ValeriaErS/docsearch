@@ -10,15 +10,13 @@ import (
     "context"
 )
 
-func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, int, map[string]float64) {
+func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
     startTotal := time.Now()
-
-    fmt.Println("Провайдер LLM:", cfg.LLM.Provider)
 
     startEmbed := time.Now() //эмбеддинг
     vec, err := embed.GetEmbedding(ctx, question, &cfg)
     if err != nil {
-        return []string{}, []string{}, []float64{}, "не могу понять ваш вопрос", []int{}, 0, map[string]float64{}
+        return []string{}, []string{}, []float64{}, "не могу понять ваш вопрос", []int{}, []string{}, 0, map[string]float64{}
     }
     embedDuration := time.Since(startEmbed).Seconds()
 
@@ -31,7 +29,7 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
         var err error
         vectorClient,err=vector.NewQdrantClient()
         if err!=nil{
-             return []string{}, []string{}, []float64{}, "ошибка подключения к Qdrant", []int{}, 0, map[string]float64{}
+             return []string{}, []string{}, []float64{}, "ошибка подключения к Qdrant", []int{}, []string{}, 0, map[string]float64{}
         }
     if qdrantClient,ok:=vectorClient.(*vector.QdrantClient);ok{
         qdrantClient.VectorSize = cfg.Embeddings.VectorSize
@@ -42,7 +40,7 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
     startSearch := time.Now() //поиск
     results, err := vectorClient.Search(ctx, vector.CollectionName, vec32, cfg.Retrieval.TopK, userID)
     if err != nil || len(results) == 0 {
-        return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, 0, map[string]float64{}
+       return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, []string{}, 0, map[string]float64{}
     }
     searchDuration := time.Since(startSearch).Seconds()
 
@@ -58,7 +56,7 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
         }
     }
     if !found {
-        return []string{}, []string{}, []float64{}, "ничего не нашла (ниже порога)", []int{}, 0, map[string]float64{}
+       return []string{}, []string{}, []float64{}, "ничего не нашла (ниже порога)", []int{}, []string{}, 0, map[string]float64{}
     }
 
     filteredResults := []map[string]interface{}{} //фильтрую чанки ниже порога
@@ -73,14 +71,16 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
     }
 
     if len(filteredResults) == 0 {
-        return []string{}, []string{}, []float64{}, "В документации нет информации по этому вопросу", []int{}, 0, map[string]float64{}
+        return []string{}, []string{}, []float64{}, "В документации нет информации по этому вопросу", []int{}, []string{}, 0, map[string]float64{}
     }
     results = filteredResults
+    
 
     texts := []string{}
     docs := []string{}
     scores := []float64{}
     pages := []int{}
+    chunkIDs := []string{}
 
     for _, r := range results {
         payload ,ok:= r["payload"].(map[string]interface{})
@@ -99,19 +99,23 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
         if !ok {
         continue
         }
+        chunkID, ok:= payload["chunk_id"].(string)
+        if !ok {
+            chunkID = "unknown"
+    }
+    page := 1
+        if p, ok := payload["page"].(float64); ok && int(p) > 0 {
+            page = int(p)
+        }
         
         texts = append(texts, chunkText)
         docs = append(docs, docID)
         scores = append(scores, chunkScore)
-
-        page := 1
-        if p, ok := payload["page"].(float64); ok && int(p) > 0 {
-            page = int(p)
-        }
         pages = append(pages, page)
+        chunkIDs = append(chunkIDs, chunkID)
     }
     if len(texts)==0{
-        return []string{}, []string{}, []float64{}, "В документации нет информации по этому вопросу", []int{}, 0, map[string]float64{}
+        return []string{}, []string{}, []float64{}, "В документации нет информации по этому вопросу", []int{}, []string{}, 0, map[string]float64{}
     }
 
     var answer string //llm
@@ -119,7 +123,6 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
     tokensUsed := 0
 
     if cfg.LLM.Provider == "mock" {
-        fmt.Println("Mock режим: реальный поиск выполнен, LLM возвращает тестовый ответ")
         answer = fmt.Sprintf(
             "Это тестовый ответ в режиме mock.\n\n"+
                 "Вопрос: %s\n\n"+
@@ -132,7 +135,7 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
         var err error
         answer, tokensUsed, err = llm.GetAnswerWithHistory(ctx, question, texts, docs, pages, history, &cfg)
         if err != nil {
-            return texts, docs, scores, "LLM не отвечает", pages, 0, map[string]float64{}
+            return texts, docs, scores, "LLM не отвечает", pages, chunkIDs, 0, map[string]float64{}
         }
         llmDuration = time.Since(startLLM).Seconds()
     }
@@ -146,5 +149,5 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
         "llm": llmDuration,
     }
 
-    return texts, docs, scores, answer, pages, tokensUsed, timings
+    return texts, docs, scores, answer, pages, chunkIDs, tokensUsed, timings
 }

@@ -28,7 +28,10 @@ func CheckToken(tokenString string)(string,error){ // Проверяю токе�
     }
 	
 	token,err:=jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-        return []byte(secret), nil
+        if _,ok:=t.Method.(*jwt.SigningMethodHMAC); !ok{   // проверка метод подписи
+		return nil, fmt.Errorf("неподдерживаемый метод подписи: %v", t.Header["alg"])	
+		}
+		return []byte(secret), nil
 })
 if err!=nil{
 	return "",err

@@ -5,6 +5,7 @@ import (
     "docsearch/internal/config"
     "docsearch/internal/vector"
     "docsearch/internal/corpus"
+    "context"
 )
 
 func TestIndexerWithFake(t *testing.T) {
@@ -69,4 +70,66 @@ func TestHashText(t *testing.T) {
     }
 
     t.Log("Хеширование работает корректно")
+}
+func TestIndexerIndexWithFake(t *testing.T) {
+    fakeClient := vector.NewFakeVectorStore()
+
+    cfg := &config.Config{
+        Corpus: struct {
+            Path string `yaml:"path"`
+            Formats []string `yaml:"formats"`
+        }{
+            Path: "./docs",
+            Formats: []string{"md", "txt"},
+        },
+        Chunking: struct {
+            MaxTokens int `yaml:"max_tokens"`
+            OverlapTokens int `yaml:"overlap_tokens"`
+        }{
+            MaxTokens: 512,
+            OverlapTokens: 64,
+        },
+        Embeddings: struct {
+            Provider string `yaml:"provider"`
+            Model string `yaml:"model"`
+            BaseURL string `yaml:"base_url"`
+            VectorSize int `yaml:"vector_size"`
+        }{
+            Provider: "mock",
+            Model: "mock",
+            BaseURL: "",
+            VectorSize:768,
+        },
+        Retrieval: struct {
+            TopK int `yaml:"top_k"`
+            MinScore float64 `yaml:"min_score"`
+        }{
+            TopK: 5,
+            MinScore: 0.2,
+        },
+        LLM: struct {
+            Provider string  `yaml:"provider"`
+            Model string  `yaml:"model"`
+            BaseURL string  `yaml:"base_url"`
+            Temperature float64 `yaml:"temperature"`
+            MaxTokens int `yaml:"max_tokens"`
+        }{
+            Provider: "mock",
+            Model:"mock",
+        },
+    }
+
+    idx := NewIndexer(cfg, fakeClient, "testuser")
+    
+    ctx := context.Background()
+    err := idx.Index(ctx)
+    if err != nil {
+        t.Logf("Индексация завершена с предупреждением: %v", err)
+    }
+
+    if len(fakeClient.Points) == 0 {
+        t.Log("Документов не найдено (папка пуста)")
+    } else {
+        t.Logf("Сохранено %d чанков в FakeVectorStore", len(fakeClient.Points))
+    }
 }
