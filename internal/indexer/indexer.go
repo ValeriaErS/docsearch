@@ -125,7 +125,7 @@ func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
 
 	for idx, ch := range chunks {
 
-		page:=doc.GetPageByPosition(ch.StartPos)
+		page := doc.GetPageByPosition(ch.StartPos)
 
 		fmt.Printf("Чанк %d: страница %d, позиция %d\n", idx+1, page, ch.StartPos)
 
