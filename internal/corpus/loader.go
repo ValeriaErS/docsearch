@@ -18,7 +18,7 @@ func readPDF(path string) (string, map[int]string, []int, error) { // читаю
 	var fullText strings.Builder
 	pages := make(map[int]string)
 	var pageOffsets []int
-	offset:=0
+	offset := 0
 
 	for i := 1; i <= reader.NumPage(); i++ { // прохожу по всем страницам
 		page := reader.Page(i)
@@ -29,11 +29,11 @@ func readPDF(path string) (string, map[int]string, []int, error) { // читаю
 		if err != nil {
 			continue
 		}
-		pageOffsets=append(pageOffsets,offset)  // запоминаю позицию начала страницы в общем тексте
+		pageOffsets = append(pageOffsets, offset) // запоминаю позицию начала страницы в общем тексте
 		pages[i] = content
 		fullText.WriteString(content)
 		fullText.WriteString("\n")
-		offset+=len(content)+1
+		offset += len(content) + 1
 	}
 	return fullText.String(), pages, pageOffsets, nil
 }
@@ -66,7 +66,7 @@ func LoadDocuments(path string, formats []string) ([]Document, error) { //format
 		var pageOffsets []int
 
 		if ext == ".pdf" {
-			 text, pages, pageOffsets, err = readPDF(fullPath)
+			text, pages, pageOffsets, err = readPDF(fullPath)
 			if err != nil {
 				fmt.Printf("Ошибка чтения PDF %s: %v\n", name, err)
 				continue
@@ -81,13 +81,13 @@ func LoadDocuments(path string, formats []string) ([]Document, error) { //format
 
 			text = string(data)
 			pages = nil
-			pageOffsets=nil
+			pageOffsets = nil
 		}
 
 		doc := Document{ // создаю документ и нормализую текст
-			Name:  name,
-			Text:  NormalizeNext(text),
-			Pages: pages,
+			Name:        name,
+			Text:        NormalizeNext(text),
+			Pages:       pages,
 			PageOffsets: pageOffsets,
 		}
 		docs = append(docs, doc)
