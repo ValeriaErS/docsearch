@@ -12,13 +12,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
-	"os/signal"
 	"time"
 )
-const maxHistorySize=50
+
+const maxHistorySize = 50
 
 var loginAttempts = make(map[string]int)
 var loginBlocked = make(map[string]time.Time)
@@ -60,31 +61,31 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
-	go func(){
+	go func() {
 		fmt.Println("Сайт запущен: http://localhost" + port)
-		if err := srv.ListenAndServe(); err != nil && err!=http.ErrServerClosed{
-		fmt.Println("Ошибка сервера:", err)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Println("Ошибка сервера:", err)
+		}
+	}()
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt)
+	<-quit
+
+	fmt.Println("Завершаем сервер...")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		fmt.Println("Ошибка завершения:", err)
 	}
-}()
-quit:=make(chan os.Signal,1)
-signal.Notify(quit,os.Interrupt)
-<-quit
+	if err := database.Close(); err != nil {
+		fmt.Println("Ошибка закрытия БД:", err)
+	}
 
-fmt.Println("Завершаем сервер...")
-ctx,cancel:=context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
-
-if err:=srv.Shutdown(ctx);err!=nil{
-	fmt.Println("Ошибка завершения:", err)
-}
-if err:=database.Close();err!=nil{
-	 fmt.Println("Ошибка закрытия БД:", err)
-}
-
-fmt.Println("Сервер остановлен")
+	fmt.Println("Сервер остановлен")
 }
 func showIndex(w http.ResponseWriter, r *http.Request) {
-    http.ServeFile(w, r, "web/index.html")
+	http.ServeFile(w, r, "web/index.html")
 }
 
 func showChat(w http.ResponseWriter, r *http.Request) {
@@ -304,8 +305,8 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 	chatMutex.Unlock()
 
 	chatMutex.Lock()
-	if len(chatHistory[userID])>maxHistorySize{
-		chatHistory[userID]=chatHistory[userID][len(chatHistory[userID])-maxHistorySize:]
+	if len(chatHistory[userID]) > maxHistorySize {
+		chatHistory[userID] = chatHistory[userID][len(chatHistory[userID])-maxHistorySize:]
 
 	}
 	chatMutex.Unlock()
