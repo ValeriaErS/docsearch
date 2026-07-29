@@ -254,12 +254,12 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 			time.Sleep(time.Duration(attempt) * time.Second)
 		}
 		if req.GetBody != nil {
-            body, err := req.GetBody()
-            if err != nil {
-                return nil, fmt.Errorf("ошибка получения тела запроса: %w", err)
-            }
-            req.Body = body
-        }
+			body, err := req.GetBody()
+			if err != nil {
+				return nil, fmt.Errorf("ошибка получения тела запроса: %w", err)
+			}
+			req.Body = body
+		}
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -268,7 +268,7 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-            return resp, nil
+			return resp, nil
 		}
 
 		body, _ := io.ReadAll(resp.Body)
