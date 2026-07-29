@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 )
+const maxHistorySize=50
 
 var loginAttempts = make(map[string]int)
 var loginBlocked = make(map[string]time.Time)
@@ -282,6 +283,13 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 		"role":    "user",
 		"content": req.Query,
 	})
+	chatMutex.Unlock()
+
+	chatMutex.Lock()
+	if len(chatHistory[userID])>maxHistorySize{
+		chatHistory[userID]=chatHistory[userID][len(chatHistory[userID])-maxHistorySize:]
+
+	}
 	chatMutex.Unlock()
 
 	chatMutex.RLock()
