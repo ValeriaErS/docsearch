@@ -91,9 +91,11 @@ type IntelligentChunk struct { // один чанк
 	TokenCount  int
 	Page        int
 	OverlapFrom int
+	StartPos    int
 }
 
 func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens int) []IntelligentChunk {
+	charPos := 0
 	if overlapTokens >= maxTokens { //если перекрытие слишком большое уменьшаю его
 		overlapTokens = maxTokens / 4
 	}
@@ -141,6 +143,7 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 						Index:       chunkIndex,
 						TokenCount:  currentTokens,
 						OverlapFrom: -1, //нет перекрытия
+						StartPos:    charPos,
 					})
 					chunkIndex++
 				}
@@ -189,6 +192,7 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 				Index:       chunkIndex,
 				TokenCount:  currentTokens,
 				OverlapFrom: -1,
+				StartPos:    charPos,
 			})
 			chunkIndex++
 		}
