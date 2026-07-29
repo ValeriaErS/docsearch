@@ -1,19 +1,7 @@
-.PHONY: test build demo eval clean install
+.PHONY: test build demo eval clean install compare
 
+# Определяем ОС
 ifeq ($(OS),Windows_NT)
-    DETECTED_OS := windows
-else
-    UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
-    ifeq ($(UNAME_S),Linux)
-        DETECTED_OS := linux
-    else ifeq ($(UNAME_S),Darwin)
-        DETECTED_OS := darwin
-    else
-        DETECTED_OS := unknown
-    endif
-endif
-
-ifeq ($(DETECTED_OS),windows)
     EXE   := .exe
     RM    := del /Q /F
     RMDIR := rmdir /S /Q
@@ -42,6 +30,9 @@ demo:
 
 eval:
 	go run ./cmd/docsearch eval --user demo --dataset testdata/control/questions.jsonl --config $(MOCK_CONFIG)
+
+compare:
+	go run ./cmd/docsearch compare --user demo --config $(MOCK_CONFIG)
 
 clean:
 	-$(RM) $(BINARY)
