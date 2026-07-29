@@ -124,15 +124,15 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 			if i < len(sentences)-1 {
 				s = s + "."
 			}
-			 sentPos := strings.Index(text[globalPos:], s)
-			 if sentPos==-1{
-				sentPos=strings.Index(text,s)
-				if sentPos==-1{
+			sentPos := strings.Index(text[globalPos:], s)
+			if sentPos == -1 {
+				sentPos = strings.Index(text, s)
+				if sentPos == -1 {
 					continue
 				}
-			 } else{
-				sentPos+=globalPos
-			 }
+			} else {
+				sentPos += globalPos
+			}
 
 			tokenCount := len(enc.Encode(s, nil, nil))
 
@@ -140,8 +140,8 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 				if current != "" {
 					current = s
 					currentStartPos = sentPos
-				}else {
-                    current = current + " " + s
+				} else {
+					current = current + " " + s
 				}
 				currentTokens = currentTokens + tokenCount
 			} else {
@@ -160,11 +160,11 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 					chunkIndex++
 				}
 
-					overlapBuffer = ""
-                    overlapBufferStartPos = 0
-					overlapTokensCount = 0
+				overlapBuffer = ""
+				overlapBufferStartPos = 0
+				overlapTokensCount = 0
 
-					if overlapTokens > 0 && current != "" {
+				if overlapTokens > 0 && current != "" {
 					prevSentences := strings.Split(current, ". ")
 
 					for j := len(prevSentences) - 1; j >= 0; j-- { //с конца собираю
@@ -179,19 +179,18 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 							} else {
 								overlapBuffer = s2
 								overlapBufferStartPos = len(current) - len(s2) - 1
-                                if overlapBufferStartPos < 0 {
-                                overlapBufferStartPos = 0
+								if overlapBufferStartPos < 0 {
+									overlapBufferStartPos = 0
+								}
 							}
-						}
 							overlapTokensCount = overlapTokensCount + tCount
 						} else {
 							break
 						}
 					}
 				}
-if overlapBuffer != "" {
-			
-				
+				if overlapBuffer != "" {
+
 					current = overlapBuffer + " " + s
 					currentStartPos = overlapBufferStartPos
 					currentTokens = overlapTokensCount + tokenCount
@@ -200,7 +199,7 @@ if overlapBuffer != "" {
 					currentStartPos = sentPos
 					currentTokens = tokenCount
 				}
-				
+
 			}
 			globalPos = sentPos + len(s)
 		}
