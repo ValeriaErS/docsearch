@@ -88,6 +88,17 @@ go build -o docsearch.exe ./cmd/docsearch
 - .\docsearch.exe web --port :8080e (запуск HTTP сервера)
 - .\docsearch.exe eval --user Имя_пользователя (оценка качества)
 
+## Mock-режим
+
+Для тестирования без внешних сервисов (Qdrant, LM Studio, OpenRouter) используется mock-режим:
+
+- В `configs/config.mock.yml` указан `provider: "mock"`
+- Используется `FakeVectorStore` вместо Qdrant
+- Эмбеддинги генерируются на основе текста (bag-of-words)
+- Работает без интернета
+
+Запуск: `make demo` или `make eval`
+
 ## Переменные окружения: ##
 - LLM_API_KEY=ваш_ключ
 - DATABASE_URL-Строка подключения к Supabase (PostgreSQL)
@@ -133,7 +144,7 @@ go build -o docsearch.exe ./cmd/docsearch
 # Команды Makefile
 - make build (собрать исполняемый файл)
 - make test	(запустить тесты)
-- make demo	(запустить индексацию и демо-поиск)
+- make demo	(запустить индексацию и демо-поиск; после выполнения результаты сохраняются в `tmp/demo_result.json`)
 - make clean (очистить временные файлы)
 - make eval (запустить оценку качества поиска)
 - make install (скопировать в корень программу)
