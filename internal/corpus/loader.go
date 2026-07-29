@@ -8,15 +8,17 @@ import (
 	"strings"
 )
 
-func readPDF(path string) (string, map[int]string, error) { // читаю PDF файл и достаю из него текст
+func readPDF(path string) (string, map[int]string, []int, error) { // читаю PDF файл и достаю из него текст
 	file, reader, err := pdf.Open(path)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	defer file.Close()
 
 	var fullText strings.Builder
 	pages := make(map[int]string)
+	var pageOffsets []int
+	offset:=0
 
 	for i := 1; i <= reader.NumPage(); i++ { // прохожу по всем страницам
 		page := reader.Page(i)
@@ -27,11 +29,13 @@ func readPDF(path string) (string, map[int]string, error) { // читаю PDF ф
 		if err != nil {
 			continue
 		}
+		pageOffsets=append(pageOffsets,offset)  // запоминаю позицию начала страницы в общем тексте
 		pages[i] = content
 		fullText.WriteString(content)
 		fullText.WriteString("\n")
+		offset+=len(content)+1
 	}
-	return fullText.String(), pages, nil
+	return fullText.String(), pages, pageOffsets, nil
 }
 
 func LoadDocuments(path string, formats []string) ([]Document, error) { //formats как параметр
@@ -59,9 +63,10 @@ func LoadDocuments(path string, formats []string) ([]Document, error) { //format
 		fullPath := filepath.Join(path, name)
 		var text string
 		var pages map[int]string
+		var pageOffsets []int
 
 		if ext == ".pdf" {
-			text, pages, err = readPDF(fullPath)
+			 text, pages, pageOffsets, err = readPDF(fullPath)
 			if err != nil {
 				fmt.Printf("Ошибка чтения PDF %s: %v\n", name, err)
 				continue
@@ -75,17 +80,15 @@ func LoadDocuments(path string, formats []string) ([]Document, error) { //format
 			}
 
 			text = string(data)
-			if ext == ".html" {
-				text = RemoveHTMLTags(text)
-			}
-
 			pages = nil
+			pageOffsets=nil
 		}
 
 		doc := Document{ // создаю документ и нормализую текст
 			Name:  name,
 			Text:  NormalizeNext(text),
 			Pages: pages,
+			PageOffsets: pageOffsets,
 		}
 		docs = append(docs, doc)
 
