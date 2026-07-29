@@ -33,6 +33,8 @@ type Response struct {
 
 func runDemo(cfg *config.Config, userID string, vectorClient vector.VectorStore) {
 	fmt.Println("Демо режим")
+	os.Remove("./.docsearch_index_" + userID + ".json")
+	fmt.Println("Удалил старый индекс для демо")
 
 	fmt.Println("Индексирую документы")
 	idx := indexer.NewIndexer(cfg, vectorClient, userID)
@@ -195,7 +197,7 @@ func main() {
 		return
 	}
 
-	if needIndex { // если нада индексировать
+	if needIndex { // если надо индексировать
 		if userID == "" { // проверка указали ли пользователя
 			fmt.Println("Ошибка:для индексации нужно указать --user Имя")
 			return
@@ -221,7 +223,7 @@ func main() {
 	}
 
 	if question != "" { // если задан вопрос
-		if userID == "" { // пользователь обяхателен для ask
+		if userID == "" { // пользователь обязателен для ask
 			fmt.Println("Ошибка: для поиска необходимо указать пользователя")
 			fmt.Println("Используйте: docsearch.exe ask \"вопрос\" --user Имя")
 			fmt.Println("Пример: docsearch.exe ask \"Что такое RAG?\" --user Валерия")
