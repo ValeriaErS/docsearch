@@ -1,31 +1,54 @@
-.PHONY: test build demo eval clean
+.PHONY: test build demo eval clean install
+
+ifeq ($(OS),Windows_NT)
+    DETECTED_OS := windows
+else
+    UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
+    ifeq ($(UNAME_S),Linux)
+        DETECTED_OS := linux
+    else ifeq ($(UNAME_S),Darwin)
+        DETECTED_OS := darwin
+    else
+        DETECTED_OS := unknown
+    endif
+endif
+
+ifeq ($(DETECTED_OS),windows)
+    EXE   := .exe
+    RM    := del /Q /F
+    RMDIR := rmdir /S /Q
+    COPY  := copy
+    MKDIR := mkdir
+else
+    EXE   :=
+    RM    := rm -f
+    RMDIR := rm -rf
+    COPY  := cp
+    MKDIR := mkdir -p
+endif
+
+BINARY      := bin/docsearch$(EXE)
+MOCK_CONFIG := configs/config.mock.yml
 
 test:
 	go test ./...
 
 build:
-	go build -o bin/docsearch.exe ./cmd/docsearch
+	-$(MKDIR) bin
+	go build -o $(BINARY) ./cmd/docsearch
 
 demo:
-	@echo "Демо режим (mock)"
-	del .docsearch_index_demo.json 2>nul || echo Индекс не найден
-	mkdir docs\demo 2>nul || echo Папка уже существует
-	copy testdata\control\*.md docs\demo\ 2>nul || echo Файлы уже есть
-	go run ./cmd/docsearch demo --config configs/config.mock.yml
-	@echo "Готово. Результат в demo_result.json"
+	go run ./cmd/docsearch demo --config $(MOCK_CONFIG)
 
 eval:
-	go run ./cmd/docsearch eval --user demo
-	go run ./cmd/docsearch eval --user demo --config configs/config.mock.yml
+	go run ./cmd/docsearch eval --user demo --dataset testdata/control/questions.jsonl --config $(MOCK_CONFIG)
 
 clean:
-	del /f /q bin\docsearch.exe 2>nul
-	del /f /q .docsearch_index_*.json 2>nul
-	del /f /q eval_results.json 2>nul
-	del /f /q demo_result.json 2>nul
-	rmdir /s /q docs\demo 2>nul
+	-$(RM) $(BINARY)
+	-$(RM) .docsearch_index_*.json
+	-$(RM) eval_results.json
+	-$(RM) demo_result.json
+	-$(RMDIR) tmp
 
 install: build
-	@echo "Устанавливаю docsearch"
-	copy bin\docsearch.exe docsearch.exe
-	@echo "Готово! Теперь можно запускать: .\docsearch.exe"
+	$(COPY) $(BINARY) docsearch$(EXE)
