@@ -125,15 +125,9 @@ func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
 
 	for idx, ch := range chunks {
 
-		page := 1
-		if doc.Pages != nil && len(doc.Pages) > 0 {
+		page:=doc.GetPageByPosition(ch.StartPos)
 
-			page = 1 + (idx * len(doc.Pages) / len(chunks))
-			if page > len(doc.Pages) {
-				page = len(doc.Pages)
-			}
-		}
-		fmt.Printf("Чанк %d: страница %d\n", idx+1, page)
+		fmt.Printf("Чанк %d: страница %d, позиция %d\n", idx+1, page, ch.StartPos)
 
 		vec, err := embed.GetEmbedding(ctx, ch.Text, i.Config) // получаю эмбеддинг
 		if err != nil {
