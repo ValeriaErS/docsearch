@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -17,10 +19,49 @@ func GetEmbedding(ctx context.Context, text string, cfg *config.Config) ([]float
 		if vectorSize <= 0 {
 			vectorSize = 768
 		}
-		embedding := make([]float64, vectorSize) //возврат случайного вектора
-		for i := 0; i < vectorSize; i++ {
-			embedding[i] = 0.1 * float64(i%10)
+
+		wordPositions := map[string]int{ // словарик слово позиция в векторе
+			"rag": 0, "retrieval": 0, "augmented": 0, "generation": 0,
+			"эмбеддинг": 1, "эмбеддинги": 1, "embedding": 1, "vector": 1, "вектор": 1,
+			"поиск": 2, "search": 2,
+			"qdrant": 4, "коллекция": 4,
+			"fileauditor": 5, "auditor": 5, "аудит": 5,
+			"установка": 6, "установить": 6, "install": 6, "docsearch": 6,
+			"индексация": 7, "index": 7, "чанк": 8, "chunk": 8,
+			"llm": 9, "модель": 16,
+			"документ": 10, "документация": 12,
+			"файл": 21, "доступ": 22, "журнал": 23,
+			"сканирование": 28, "контроль": 25,
 		}
+
+		embedding := make([]float64, vectorSize)
+		textLower := strings.ToLower(text)
+
+		for word, pos := range wordPositions { // ключевые слова высокий вес
+			if pos < vectorSize && strings.Contains(textLower, word) {
+				embedding[pos] += 5.0
+			}
+		}
+
+		hash := 0
+		for _, ch := range textLower {
+			hash = hash*31 + int(ch)
+		}
+		for i := 0; i < vectorSize; i++ {
+			embedding[i] += float64((hash+i*7)%100) / 5000.0 // слабый вклад
+		}
+
+		var norm float64 // нормализация
+		for _, v := range embedding {
+			norm += v * v
+		}
+		norm = math.Sqrt(norm)
+		if norm > 0 {
+			for i := range embedding {
+				embedding[i] /= norm
+			}
+		}
+
 		return embedding, nil
 	}
 
