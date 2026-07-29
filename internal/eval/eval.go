@@ -5,6 +5,7 @@ import (
 	"context"
 	"docsearch/internal/config"
 	"docsearch/internal/embed"
+	"docsearch/internal/indexer"
 	"docsearch/internal/rag"
 	"docsearch/internal/retrieve"
 	"docsearch/internal/safety"
@@ -51,6 +52,16 @@ func RunEval(cfg *config.Config, datasetPath string, vectorClient vector.VectorS
 		fmt.Println("Используйте: .\\docsearch.exe eval --user Имя")
 		fmt.Println("Пример: .\\docsearch.exe eval --user Екатерина")
 		return
+	}
+	if cfg.Embeddings.Provider == "mock" {
+		os.Remove("./.docsearch_index_" + userForEval + ".json")
+		fmt.Println("Индексирую документы для eval...")
+		idx := indexer.NewIndexer(cfg, vectorClient, userForEval)
+		if err := idx.Index(context.Background()); err != nil {
+			fmt.Println("Ошибка индексации для eval:", err)
+			return
+		}
+		fmt.Println("Индексация завершена")
 	}
 	safeUser, err := safety.SanitizeAndValidateUser(userForEval)
 	if err != nil {
