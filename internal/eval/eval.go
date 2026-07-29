@@ -53,22 +53,23 @@ func RunEval(cfg *config.Config, datasetPath string, vectorClient vector.VectorS
 		fmt.Println("Пример: .\\docsearch.exe eval --user Екатерина")
 		return
 	}
-	if cfg.Embeddings.Provider == "mock" {
-		os.Remove("./.docsearch_index_" + userForEval + ".json")
-		fmt.Println("Индексирую документы для eval...")
-		idx := indexer.NewIndexer(cfg, vectorClient, userForEval)
-		if err := idx.Index(context.Background()); err != nil {
-			fmt.Println("Ошибка индексации для eval:", err)
-			return
-		}
-		fmt.Println("Индексация завершена")
-	}
 	safeUser, err := safety.SanitizeAndValidateUser(userForEval)
-	if err != nil {
-		fmt.Printf("Ошибка: неверное имя пользователя: %v\n", err)
-		return
-	}
-	userForEval = safeUser
+    if err != nil {
+        fmt.Printf("Ошибка: неверное имя пользователя: %v\n", err)
+        return
+    }
+    userForEval = safeUser
+
+	if cfg.Embeddings.Provider == "mock" {
+        os.Remove("./.docsearch_index_" + userForEval + ".json")
+        fmt.Println("Индексирую документы для eval...")
+        idx := indexer.NewIndexer(cfg, vectorClient, userForEval)
+        if err := idx.Index(context.Background()); err != nil {
+            fmt.Println("Ошибка индексации для eval:", err)
+            return
+        }
+        fmt.Println("Индексация завершена")
+    }
 
 	userDir := "docs/" + userForEval // проверка существует ли папка пользователя
 	if _, err := os.Stat(userDir); os.IsNotExist(err) {
@@ -243,6 +244,24 @@ func RunEval(cfg *config.Config, datasetPath string, vectorClient vector.VectorS
 
 func CompareANNvsExact(cfg *config.Config, userID string, vectorClient vector.VectorStore) {
 	fmt.Println("\n Сравнение ANN и Точный поиск")
+
+	safeUser, err := safety.SanitizeAndValidateUser(userID)
+	if err != nil {
+		fmt.Printf("Ошибка: неверное имя пользователя: %v\n", err)
+		return
+	}
+	userID = safeUser
+	
+    if cfg.Embeddings.Provider == "mock" {   // если mock режим сначала индексируем
+         os.Remove("./.docsearch_index_" + userID + ".json")
+        fmt.Println("Индексирую документы для compare...")
+        idx := indexer.NewIndexer(cfg, vectorClient, userID)
+        if err := idx.Index(context.Background()); err != nil {
+            fmt.Println("Ошибка индексации для compare:", err)
+            return
+        }
+        fmt.Println("Индексация завершена")
+    }
 
 	file, err := os.Open("testdata/control/questions.jsonl")
 	if err != nil {
