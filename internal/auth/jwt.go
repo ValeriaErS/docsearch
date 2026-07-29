@@ -29,7 +29,7 @@ func CheckToken(tokenString string) (string, error) { // Проверяю ток
 
 	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok { // проверка метод подписи
-			return nil, fmt.Errorf("неподдерживаемый метод подписи: %v", t.Header["alg"])
+			return nil, fmt.Errorf("неподдерживаемый метод подписи: %v", t.Header["alg"])  // ограничение signing method только HS256 
 		}
 		return []byte(secret), nil
 	})
