@@ -43,8 +43,8 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 	}
 	searchDuration := time.Since(startSearch).Seconds()
 
-	found := false //проверка порога
-	for _, r := range results {    //  приведения типов все v, ok := проверены
+	found := false              //проверка порога
+	for _, r := range results { //  приведения типов все v, ok := проверены
 		score, ok := r["score"].(float64)
 		if !ok {
 			continue
