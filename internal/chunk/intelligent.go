@@ -95,7 +95,6 @@ type IntelligentChunk struct { // один чанк
 }
 
 func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens int) []IntelligentChunk {
-	charPos := 0
 	if overlapTokens >= maxTokens { //если перекрытие слишком большое уменьшаю его
 		overlapTokens = maxTokens / 4
 	}
@@ -106,15 +105,17 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 	}
 
 	var chunks []IntelligentChunk
-
 	sections := parseSections(text)
 	chunkIndex := 0
+	globalPos := 0 //позиция в общем тексте
 
 	for _, section := range sections {
 		sentences := strings.Split(section.Content, ". ")
 
 		var current string
+		var currentStartPos int
 		var overlapBuffer string
+		var overlapBufferStartPos int
 		currentTokens := 0
 		overlapTokensCount := 0
 
@@ -123,13 +124,24 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 			if i < len(sentences)-1 {
 				s = s + "."
 			}
+			 sentPos := strings.Index(text[globalPos:], s)
+			 if sentPos==-1{
+				sentPos=strings.Index(text,s)
+				if sentPos==-1{
+					continue
+				}
+			 } else{
+				sentPos+=globalPos
+			 }
+
 			tokenCount := len(enc.Encode(s, nil, nil))
 
 			if currentTokens+tokenCount <= maxTokens { // влезет ли предложение в текущий чанк
 				if current != "" {
-					current = current + " " + s
-				} else {
 					current = s
+					currentStartPos = sentPos
+				}else {
+                    current = current + " " + s
 				}
 				currentTokens = currentTokens + tokenCount
 			} else {
@@ -143,16 +155,17 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 						Index:       chunkIndex,
 						TokenCount:  currentTokens,
 						OverlapFrom: -1, //нет перекрытия
-						StartPos:    charPos,
+						StartPos:    currentStartPos,
 					})
 					chunkIndex++
 				}
 
-				if overlapTokens > 0 && current != "" {
-
-					prevSentences := strings.Split(current, ". ")
 					overlapBuffer = ""
+                    overlapBufferStartPos = 0
 					overlapTokensCount = 0
+
+					if overlapTokens > 0 && current != "" {
+					prevSentences := strings.Split(current, ". ")
 
 					for j := len(prevSentences) - 1; j >= 0; j-- { //с конца собираю
 						s2 := prevSentences[j]
@@ -165,22 +178,31 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 								overlapBuffer = s2 + ". " + overlapBuffer
 							} else {
 								overlapBuffer = s2
+								overlapBufferStartPos = len(current) - len(s2) - 1
+                                if overlapBufferStartPos < 0 {
+                                overlapBufferStartPos = 0
 							}
+						}
 							overlapTokensCount = overlapTokensCount + tCount
 						} else {
 							break
 						}
 					}
 				}
-
-				current = overlapBuffer //новый чанк с перекрытием
-				if current != "" {
-					current = current + " " + s
+if overlapBuffer != "" {
+			
+				
+					current = overlapBuffer + " " + s
+					currentStartPos = overlapBufferStartPos
+					currentTokens = overlapTokensCount + tokenCount
 				} else {
 					current = s
+					currentStartPos = sentPos
+					currentTokens = tokenCount
 				}
-				currentTokens = overlapTokensCount + tokenCount
+				
 			}
+			globalPos = sentPos + len(s)
 		}
 
 		if current != "" {
@@ -192,7 +214,7 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 				Index:       chunkIndex,
 				TokenCount:  currentTokens,
 				OverlapFrom: -1,
-				StartPos:    charPos,
+				StartPos:    currentStartPos,
 			})
 			chunkIndex++
 		}
