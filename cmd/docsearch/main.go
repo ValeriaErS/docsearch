@@ -47,12 +47,14 @@ func runDemo(cfg *config.Config, userID string, vectorClient vector.VectorStore)
 	if vc, ok := vectorClient.(*vector.FakeVectorStore); ok {
 		fmt.Printf("После индексации: в FakeVectorStore %d точек\n", len(vc.Points))
 	}
+	outFile := "tmp/demo_result.json"
 
 	questions := []string{
 		"What is RAG?",
 		"How to install DocSearch?",
 		"How to install Linux?",
 	}
+	allResults := []Response{}
 
 	for _, q := range questions {
 		fmt.Printf("\n Вопрос: %s\n", q)
@@ -60,7 +62,7 @@ func runDemo(cfg *config.Config, userID string, vectorClient vector.VectorStore)
 			fmt.Printf("Перед поиском: в FakeVectorStore %d точек, ищем для userID=%s\n", len(vc.Points), userID)
 		}
 
-		_, docs, scores, answer, _, _, tokensUsed, _ := rag.Ask(context.Background(), *cfg, q, userID, []map[string]string{}, vectorClient)
+		results, docs, scores, answer, _, chunkIDs, tokensUsed, _ := rag.Ask(context.Background(), *cfg, q, userID, []map[string]string{}, vectorClient)
 		found := false
 		for i := 0; i < len(scores); i++ {
 			if scores[i] >= cfg.Retrieval.MinScore {
@@ -71,14 +73,41 @@ func runDemo(cfg *config.Config, userID string, vectorClient vector.VectorStore)
 
 		if !found || answer == "" {
 			fmt.Println("Ответ: В документации нет информации по этому вопросу")
-		} else {
-			fmt.Printf("Ответ: %s\n", answer)
-			fmt.Printf("Источников: %d\n", len(docs))
-			fmt.Printf("Токенов: %d\n", tokensUsed)
-		}
-	}
+			continue
+        }
+		var sources []Source
+        for i := 0; i < len(results); i++ {
+            snippet := results[i]
+            if len(snippet) > 100 {
+                snippet = snippet[:100] + "..."
+            }
+            sources = append(sources, Source{
+                DocID:   docs[i],
+                Score:   scores[i],
+                Snippet: snippet,
+                ChunkID: chunkIDs[i],
+            })
+        }
 
-	fmt.Println("\n Демо все")
+        resp := Response{
+            Query:      q,
+            Answer:     answer,
+            Sources:    sources,
+            Model:      cfg.LLM.Model,
+            TokensUsed: tokensUsed,
+            DurationMs: 0,
+        }
+        allResults = append(allResults, resp)
+
+        fmt.Printf("Ответ: %s\n", answer)
+        fmt.Printf("Источников: %d\n", len(docs))
+        fmt.Printf("Токенов: %d\n", tokensUsed)
+    }
+    os.MkdirAll("tmp", 0755)
+    jsonData, _ := json.MarshalIndent(allResults, "", "  ")  // сохр все результаты в один JSON
+    os.WriteFile(outFile, jsonData, 0644)
+    fmt.Printf("\n Результаты сохранены в %s\n", outFile)
+    fmt.Println("\n Демо все")
 }
 
 func main() {
