@@ -2,7 +2,6 @@ package vector
 
 import (
 	"context"
-	"fmt"
 	"math"
 )
 
@@ -15,12 +14,22 @@ func NewFakeVectorStore() *FakeVectorStore { //фейк клиент
 		Points: []map[string]interface{}{},
 	}
 }
-func (f *FakeVectorStore) Search(ctx context.Context, name string, vec []float32, limit int, userID string) ([]map[string]interface{}, error) {
 
+func (f *FakeVectorStore) Save(ctx context.Context, name string, id string, vec []float32, data map[string]interface{}) error { //в память сохраняю
+	f.Points = append(f.Points, map[string]interface{}{
+		"id":      id,
+		"vector":  vec,
+		"payload": data,
+		"score":   0.95,
+	})
+	return nil
+}
+
+func (f *FakeVectorStore) Search(ctx context.Context, name string, vec []float32, limit int, userID string) ([]map[string]interface{}, error) {
 	if len(f.Points) == 0 {
-		fmt.Println("FakeVectorStore пуст!")
 		return []map[string]interface{}{}, nil
 	}
+
 	query := make([]float64, len(vec))
 	for i, v := range vec {
 		query[i] = float64(v)
@@ -30,7 +39,7 @@ func (f *FakeVectorStore) Search(ctx context.Context, name string, vec []float32
 		point map[string]interface{}
 		score float64
 	}
-	var scored []scoredPoint
+	scored := []scoredPoint{}
 
 	for _, point := range f.Points {
 		payload, ok := point["payload"].(map[string]interface{})
@@ -38,29 +47,22 @@ func (f *FakeVectorStore) Search(ctx context.Context, name string, vec []float32
 			continue
 		}
 		pointUserID, ok := payload["user_id"].(string)
-		if !ok {
-			continue
-		}
-		if pointUserID != userID {
+		if !ok || pointUserID != userID {
 			continue
 		}
 
-		vectorData, ok := point["vector"].([]float32) //получаю вектор чанка
+		vecData, ok := point["vector"].([]float32)
 		if !ok {
 			continue
 		}
 
-		pointVec := make([]float64, len(vectorData))
-		for i, v := range vectorData {
+		pointVec := make([]float64, len(vecData))
+		for i, v := range vecData {
 			pointVec[i] = float64(v)
 		}
 
 		score := cosineSimilarity(query, pointVec) // считаю косинусную близость
-
-		scored = append(scored, scoredPoint{
-			point: point,
-			score: score,
-		})
+		scored = append(scored, scoredPoint{point: point, score: score})
 	}
 
 	for i := 0; i < len(scored); i++ { // сортирую по убыванию оценки
@@ -73,9 +75,89 @@ func (f *FakeVectorStore) Search(ctx context.Context, name string, vec []float32
 
 	result := []map[string]interface{}{} // первые limit результатов
 	for i := 0; i < limit && i < len(scored); i++ {
+		pointCopy := make(map[string]interface{})
+		for k, v := range scored[i].point {
+			pointCopy[k] = v
+		}
+		pointCopy["score"] = scored[i].score
+		result = append(result, pointCopy)
+	}
 
-		scored[i].point["score"] = scored[i].score
-		result = append(result, scored[i].point)
+	return result, nil
+}
+
+func (f *FakeVectorStore) Delete(ctx context.Context, name string, filter map[string]interface{}) error {
+	must, ok := filter["must"].([]map[string]interface{}) // беру doc_id и user_id из фильтра
+	if !ok || len(must) < 2 {
+		f.Points = []map[string]interface{}{}
+		return nil
+	}
+
+	var docID, userID string
+	for _, cond := range must {
+		key, ok := cond["key"].(string)
+		if !ok {
+			continue
+		}
+		match, ok := cond["match"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		value, ok := match["value"].(string)
+		if !ok {
+			continue
+		}
+		if key == "doc_id" {
+			docID = value
+		}
+		if key == "user_id" {
+			userID = value
+		}
+	}
+
+	if docID == "" || userID == "" {
+		f.Points = []map[string]interface{}{}
+		return nil
+	}
+
+	newPoints := []map[string]interface{}{} // оставляю только те точки которые не совпадают с doc_id и user_id
+	for _, point := range f.Points {
+		payload, ok := point["payload"].(map[string]interface{})
+		if !ok {
+			newPoints = append(newPoints, point)
+			continue
+		}
+		pointDocID, _ := payload["doc_id"].(string)
+		pointUserID, _ := payload["user_id"].(string)
+		if pointDocID == docID && pointUserID == userID {
+			continue
+		}
+		newPoints = append(newPoints, point)
+	}
+	f.Points = newPoints
+	return nil
+}
+
+func (f *FakeVectorStore) CreateCollection(ctx context.Context, name string) error {
+	return nil
+}
+
+func (f *FakeVectorStore) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (f *FakeVectorStore) GetAllVectors(ctx context.Context, name string, userID string) ([]map[string]interface{}, error) {
+	result := []map[string]interface{}{}
+	for _, point := range f.Points {
+		payload, ok := point["payload"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		pointUserID, ok := payload["user_id"].(string)
+		if !ok || pointUserID != userID {
+			continue
+		}
+		result = append(result, point)
 	}
 	return result, nil
 }
@@ -99,44 +181,4 @@ func cosineSimilarity(a, b []float64) float64 { //считает косинус�
 		return 0
 	}
 	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
-}
-
-func (f *FakeVectorStore) Save(ctx context.Context, name string, id string, vec []float32, data map[string]interface{}) error { //в память сохраняю
-	f.Points = append(f.Points, map[string]interface{}{
-		"id":      id,
-		"vector":  vec,
-		"payload": data,
-		"score":   0.95,
-	})
-	return nil
-}
-
-func (f *FakeVectorStore) Delete(ctx context.Context, name string, filter map[string]interface{}) error {
-	f.Points = []map[string]interface{}{}
-	return nil
-}
-
-func (f *FakeVectorStore) CreateCollection(ctx context.Context, name string) error {
-	return nil
-}
-
-func (f *FakeVectorStore) Ping(ctx context.Context) error {
-	return nil
-}
-func (f *FakeVectorStore) GetAllVectors(ctx context.Context, name string, userID string) ([]map[string]interface{}, error) {
-	result := []map[string]interface{}{}
-	for _, point := range f.Points {
-		payload, ok := point["payload"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		pointUserID, ok := payload["user_id"].(string)
-		if !ok {
-			continue
-		}
-		if pointUserID == userID {
-			result = append(result, point)
-		}
-	}
-	return result, nil
 }
