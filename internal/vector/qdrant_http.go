@@ -248,21 +248,18 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 	}
 
 	var lastErr error
-
-	var bodyBytes []byte //  сохртело для повторного использования
-	if req.Body != nil {
-		bodyBytes, _ = io.ReadAll(req.Body)
-		req.Body.Close()
-	}
-
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
+			fmt.Printf("Повторная попытка %d из %d\n", attempt+1, maxRetries)
 			time.Sleep(time.Duration(attempt) * time.Second)
-
-			if len(bodyBytes) > 0 { //пересоздаю тело
-				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-			}
 		}
+		if req.GetBody != nil {
+            body, err := req.GetBody()
+            if err != nil {
+                return nil, fmt.Errorf("ошибка получения тела запроса: %w", err)
+            }
+            req.Body = body
+        }
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -270,8 +267,8 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 			continue
 		}
 
-		if resp.StatusCode == 200 {
-			return resp, nil
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+            return resp, nil
 		}
 
 		body, _ := io.ReadAll(resp.Body)
