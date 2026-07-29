@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"os/signal"
 	"time"
 )
 const maxHistorySize=50
@@ -59,14 +60,31 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
-	fmt.Println("Сайт запущен: http://localhost" + port)
-	if err := srv.ListenAndServe(); err != nil {
+	go func(){
+		fmt.Println("Сайт запущен: http://localhost" + port)
+		if err := srv.ListenAndServe(); err != nil && err!=http.ErrServerClosed{
 		fmt.Println("Ошибка сервера:", err)
 	}
+}()
+quit:=make(chan os.Signal,1)
+signal.Notify(quit,os.Interrupt)
+<-quit
+
+fmt.Println("Завершаем сервер...")
+ctx,cancel:=context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+if err:=srv.Shutdown(ctx);err!=nil{
+	fmt.Println("Ошибка завершения:", err)
+}
+if err:=database.Close();err!=nil{
+	 fmt.Println("Ошибка закрытия БД:", err)
 }
 
+fmt.Println("Сервер остановлен")
+}
 func showIndex(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "web/index.html")
+    http.ServeFile(w, r, "web/index.html")
 }
 
 func showChat(w http.ResponseWriter, r *http.Request) {

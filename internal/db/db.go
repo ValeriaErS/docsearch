@@ -35,8 +35,8 @@ func NewDB() (*DB, error) {
 	return &DB{Conn: conn}, nil
 }
 
-func (d *DB) Close() {
-	d.Conn.Close()
+func (d *DB) Close() error {
+	return d.Conn.Close()
 }
 
 func (d *DB) CheckUser(username, password string) bool {
