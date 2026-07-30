@@ -65,7 +65,7 @@ func GetEmbedding(ctx context.Context, text string, cfg *config.Config) ([]float
 		return embedding, nil
 	}
 
-	url := cfg.Embeddings.BaseURL + "/v1/embeddings"
+	url := cfg.Embeddings.BaseURL + "/v1/embeddings" // реальный запрос к ллм
 	model := cfg.Embeddings.Model
 
 	data := map[string]interface{}{ //запрос
@@ -80,13 +80,11 @@ func GetEmbedding(ctx context.Context, text string, cfg *config.Config) ([]float
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
+			fmt.Printf("Повторная попытка %d для LM Studio\n", attempt+1)
 			time.Sleep(time.Duration(attempt) * time.Second)
 		}
 
-		client := &http.Client{ //таймаут
-			Timeout: 120 * time.Second,
-		}
-
+		client := &http.Client{Timeout:120*time.Second} //таймаут
 		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData)) // отправка post
 		if err != nil {
 			lastErr = err
@@ -99,13 +97,16 @@ func GetEmbedding(ctx context.Context, text string, cfg *config.Config) ([]float
 			lastErr = err
 			continue
 		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != 200 {
-			body, _ := io.ReadAll(resp.Body)
-			lastErr = fmt.Errorf("LM Studio ошибка %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode!=200{ //проверка статуса
+			body,_:=io.ReadAll(resp.Body)
+			resp.Body.Close()
+		
+		if resp.StatusCode == 408 || resp.StatusCode == 429 || resp.StatusCode >= 500{    // ретраю 408, 429 и 5xx
+			lastErr=fmt.Errorf("LM Studio ошибка %d: %s", resp.StatusCode, string(body))
 			continue
 		}
+		return nil, fmt.Errorf("LM Studio ошибка %d: %s", resp.StatusCode, string(body)) //а другие нет
+	}
 
 		var result struct {
 			Data []struct {
@@ -114,6 +115,8 @@ func GetEmbedding(ctx context.Context, text string, cfg *config.Config) ([]float
 		}
 
 		err = json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+
 		if err != nil {
 			lastErr = err
 			continue
@@ -128,3 +131,4 @@ func GetEmbedding(ctx context.Context, text string, cfg *config.Config) ([]float
 	}
 	return nil, fmt.Errorf("не получилось получить эмбеддинг после 3 попыток: %w", lastErr)
 }
+
