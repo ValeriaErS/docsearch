@@ -1,6 +1,5 @@
-.PHONY: test build demo eval clean install compare
+.PHONY: test build demo eval clean compare
 
-# Определяем ОС
 ifeq ($(OS),Windows_NT)
     EXE   := .exe
     RM    := del /Q /F
@@ -40,6 +39,3 @@ clean:
 	-$(RM) eval_results.json
 	-$(RM) demo_result.json
 	-$(RMDIR) tmp
-
-install: build
-	$(COPY) $(BINARY) docsearch$(EXE)
