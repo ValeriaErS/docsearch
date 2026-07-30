@@ -10,6 +10,7 @@ import (
 	"docsearch/internal/server"
 	"docsearch/internal/vector"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -74,223 +75,8 @@ func runDemo(cfg *config.Config, userID string, vectorClient vector.VectorStore)
 		if !found || answer == "" {
 			fmt.Println("Ответ: В документации нет информации по этому вопросу")
 			continue
-        }
+		}
 		var sources []Source
-        for i := 0; i < len(results); i++ {
-            snippet := results[i]
-            if len(snippet) > 100 {
-                snippet = snippet[:100] + "..."
-            }
-            sources = append(sources, Source{
-                DocID:   docs[i],
-                Score:   scores[i],
-                Snippet: snippet,
-                ChunkID: chunkIDs[i],
-            })
-        }
-
-        resp := Response{
-            Query:      q,
-            Answer:     answer,
-            Sources:    sources,
-            Model:      cfg.LLM.Model,
-            TokensUsed: tokensUsed,
-            DurationMs: 0,
-        }
-        allResults = append(allResults, resp)
-
-        fmt.Printf("Ответ: %s\n", answer)
-        fmt.Printf("Источников: %d\n", len(docs))
-        fmt.Printf("Токенов: %d\n", tokensUsed)
-    }
-    os.MkdirAll("tmp", 0755)
-    jsonData, _ := json.MarshalIndent(allResults, "", "  ")  // сохр все результаты в один JSON
-    os.WriteFile(outFile, jsonData, 0644)
-    fmt.Printf("\n Результаты сохранены в %s\n", outFile)
-    fmt.Println("\n Демо все")
-}
-
-func main() {
-	args := os.Args[1:] //что ввел кроме 1
-	configFile := "configs/config.yml"
-	needIndex := false
-	question := ""
-	outFile := ""
-	serveMode := false
-	port := ":8080"
-	userID := ""
-	evalMode := false
-	datasetPath := ""
-
-	for i := 0; i < len(args); i++ { // разбираю команды
-		if args[i] == "--config" && i+1 < len(args) {
-			configFile = args[i+1]
-			i = i + 1
-		} else if args[i] == "index" {
-			needIndex = true
-		} else if args[i] == "ask" && i+1 < len(args) {
-			question = args[i+1]
-			i = i + 1
-		} else if args[i] == "--out" && i+1 < len(args) {
-			outFile = args[i+1]
-			i = i + 1
-		} else if args[i] == "web" {
-			serveMode = true
-		} else if args[i] == "--serve" {
-			serveMode = true
-		} else if args[i] == "--port" && i+1 < len(args) {
-			port = args[i+1]
-			i = i + 1
-		} else if args[i] == "--user" && i+1 < len(args) {
-			userID = args[i+1]
-			i = i + 1
-		} else if args[i] == "eval" {
-			evalMode = true
-		} else if args[i] == "--dataset" && i+1 < len(args) {
-			datasetPath = args[i+1]
-			i = i + 1
-		} else if args[i] == "compare" {
-			cfg, err := config.LoadConfig(configFile)
-			if err != nil {
-				fmt.Println("Ошибка загрузки конфига:", err)
-				return
-			}
-			var vectorClient vector.VectorStore
-			if cfg.Embeddings.Provider == "mock" {
-				vectorClient = vector.NewFakeVectorStore()
-			} else {
-				realClient, err := vector.NewQdrantClient()
-				if err != nil {
-					fmt.Println("Ошибка подключения к Qdrant:", err)
-					return
-				}
-				vectorClient = realClient
-			}
-
-			userID := "demo"
-			for i, arg := range os.Args {
-				if arg == "--user" && i+1 < len(os.Args) {
-					userID = os.Args[i+1]
-					break
-				}
-			}
-
-			eval.CompareANNvsExact(cfg, userID, vectorClient)
-			return
-		} else if args[i] == "demo" {
-			cfg, err := config.LoadConfig(configFile)
-			if err != nil {
-				fmt.Println("Ошибка загрузки конфига:", err)
-				return
-			}
-			fakeClient := vector.NewFakeVectorStore()
-			fmt.Println("Использую FakeVectorStore (mock-режим)")
-			runDemo(cfg, "demo", fakeClient)
-			return
-		}
-	}
-
-	cfg, err := config.LoadConfig(configFile)
-	if err != nil {
-		fmt.Println("Ошибка загрузки конфига:", err)
-		return
-	}
-
-	var sharedVectorClient vector.VectorStore //общий клиент
-	if cfg.Embeddings.Provider == "mock" {
-		sharedVectorClient = vector.NewFakeVectorStore()
-		fmt.Println("Использую FakeVectorStore (mock-режим)")
-	} else {
-		realClient, err := vector.NewQdrantClient()
-		if err != nil {
-			fmt.Println("Ошибка подключения к Qdrant:", err)
-			return
-		}
-		if err := realClient.Ping(context.Background()); err != nil {
-			fmt.Println("Ошибка: Qdrant не отвечает:", err)
-			return
-		}
-		sharedVectorClient = realClient
-		if qdrantClient, ok := sharedVectorClient.(*vector.QdrantClient); ok {
-			qdrantClient.VectorSize = cfg.Embeddings.VectorSize
-		}
-	}
-
-	if evalMode {
-		eval.RunEval(cfg, datasetPath, sharedVectorClient)
-		return
-	}
-
-	if serveMode { // если запускаю сервер
-		server.RunWeb(cfg, port, sharedVectorClient)
-		return
-	}
-
-	if needIndex { // если надо индексировать
-		if userID == "" { // проверка указали ли пользователя
-			fmt.Println("Ошибка:для индексации нужно указать --user Имя")
-			return
-		}
-		safeUser, err := safety.SanitizeAndValidateUser(userID)
-		if err != nil {
-			fmt.Println("Ошибка: неверное имя пользователя:", err)
-			return
-		}
-		userID = safeUser
-
-		fmt.Println("Передаю размер в индексер:", cfg.Embeddings.VectorSize)
-
-		idx := indexer.NewIndexer(cfg, sharedVectorClient, userID)
-		err = idx.Index(context.Background())
-		if err != nil {
-			fmt.Println("Ошибка индексации:", err)
-			return
-		}
-
-		fmt.Println("С индексацией все хорошо")
-		return
-	}
-
-	if question != "" { // если задан вопрос
-		if userID == "" { // пользователь обязателен для ask
-			fmt.Println("Ошибка: для поиска необходимо указать пользователя")
-			fmt.Println("Используйте: docsearch.exe ask \"вопрос\" --user Имя")
-			fmt.Println("Пример: docsearch.exe ask \"Что такое RAG?\" --user Валерия")
-			return
-		}
-		safeUser, err := safety.SanitizeAndValidateUser(userID)
-		if err != nil {
-			fmt.Println("Ошибка: неверное имя пользователя:", err)
-			return
-		}
-		userID = safeUser
-
-		startTime := time.Now()
-
-		results, docs, scores, answer, _, chunkIDs, tokensUsed, _ := rag.Ask(context.Background(), *cfg, question, userID, []map[string]string{}, sharedVectorClient)
-		found := false // проверяю порог
-		for i := 0; i < len(scores); i++ {
-			if scores[i] >= cfg.Retrieval.MinScore {
-				found = true
-				break
-			}
-		}
-
-		if !found { // возврат JSON с пустым sources
-			resp := Response{
-				Query:      question,
-				Answer:     "В документации нет информации по этому вопросу",
-				Sources:    []Source{},
-				Model:      cfg.LLM.Model,
-				TokensUsed: 0,
-				DurationMs: 0,
-			}
-			jsonData, _ := json.MarshalIndent(resp, "", "  ")
-			fmt.Println(string(jsonData))
-			return
-		}
-
-		var sources []Source // собираю источники
 		for i := 0; i < len(results); i++ {
 			snippet := results[i]
 			if len(snippet) > 100 {
@@ -304,42 +90,338 @@ func main() {
 			})
 		}
 
-		duration := time.Since(startTime).Milliseconds()
-
-		resp := Response{ // собираю ответ
-			Query:      question,
+		resp := Response{
+			Query:      q,
 			Answer:     answer,
 			Sources:    sources,
 			Model:      cfg.LLM.Model,
 			TokensUsed: tokensUsed,
-			DurationMs: duration,
+			DurationMs: 0,
 		}
+		allResults = append(allResults, resp)
 
-		jsonData, err := json.MarshalIndent(resp, "", "  ")
-		if err != nil {
-			fmt.Println("Ошибка формирования:", err)
-			return
-		}
+		fmt.Printf("Ответ: %s\n", answer)
+		fmt.Printf("Источников: %d\n", len(docs))
+		fmt.Printf("Токенов: %d\n", tokensUsed)
+	}
+	os.MkdirAll("tmp", 0755)
+	jsonData, _ := json.MarshalIndent(allResults, "", "  ")
+	os.WriteFile(outFile, jsonData, 0644)
+	fmt.Printf("\n Результаты сохранены в %s\n", outFile)
+	fmt.Println("\n Демо все")
+}
 
-		if outFile != "" {
-			err := os.WriteFile(outFile, jsonData, 0644)
-			if err != nil {
-				fmt.Println("Ошибка сохранения в файл:", err)
-			} else {
-				fmt.Println("Результат сохранён в", outFile)
-			}
-		} else {
-			fmt.Println(string(jsonData))
-		}
+func printHelp() {
+	fmt.Println("DocSearch — поиск по документации с RAG")
+	fmt.Println()
+	fmt.Println("Команды:")
+	fmt.Println("ask --query \"вопрос\" --user имя Поиск ответа в документации")
+	fmt.Println("serve --addr :8080  Запуск веб-сервера")
+	fmt.Println("index --user имя  Индексация документов")
+	fmt.Println("eval --user имя  Оценка качества")
+	fmt.Println("compare --user имя  Сравнение ANN и точного поиска")
+	fmt.Println("demo  Демонстрационный режим")
+	fmt.Println("--version Версия программы")
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		printHelp()
 		return
 	}
 
-	fmt.Println("Команды:")
-	fmt.Println("index - индексация документов")
-	fmt.Println("ask 'текст'- поиск по документации")
-	fmt.Println("ask 'текст' --out file.json - сохранить результат в JSON")
-	fmt.Println("serve - запустить HTTP сервер")
-	fmt.Println("port :8080 - порт для сервера")
-	fmt.Println("web - запустить веб-интерфейс")
-	fmt.Println("eval - оценка качества поиска")
+	command := os.Args[1]
+
+	switch command {
+	case "ask":
+		askCmd()
+	case "serve":
+		serveCmd()
+	case "web":
+		fmt.Println("Команда web устарела. Используйте serve.")
+		serveCmd()
+	case "index":
+		indexCmd()
+	case "eval":
+		evalCmd()
+	case "compare":
+		compareCmd()
+	case "demo":
+		demoCmd()
+	case "--version", "-v":
+		fmt.Println("DocSearch version 1.0.0")
+	default:
+		fmt.Printf("Неизвестная команда: %s\n\n", command)
+		printHelp()
+		os.Exit(1)
+	}
+}
+
+func askCmd() {
+	askFlag := flag.NewFlagSet("ask", flag.ExitOnError)
+	query := askFlag.String("query", "", "Вопрос к документации")
+	userID := askFlag.String("user", "", "Имя пользователя")
+	configFile := askFlag.String("config", "configs/config.yml", "Путь к конфигу")
+	outFile := askFlag.String("out", "", "Файл для сохранения результата")
+
+	askFlag.Parse(os.Args[2:])
+
+	if *query == "" {
+		fmt.Println("Ошибка: требуется --query")
+		askFlag.Usage()
+		os.Exit(2)
+	}
+	if *userID == "" {
+		fmt.Println("Ошибка: требуется --user")
+		askFlag.Usage()
+		os.Exit(2)
+	}
+
+	cfg, err := config.LoadConfig(*configFile)
+	if err != nil {
+		fmt.Println("Ошибка загрузки конфига:", err)
+		return
+	}
+
+	safeUser, err := safety.SanitizeAndValidateUser(*userID) // проверка имени пользователя
+	if err != nil {
+		fmt.Println("Ошибка: неверное имя пользователя:", err)
+		return
+	}
+
+	vectorClient, err := createVectorClient(cfg)
+	if err != nil {
+		fmt.Println("Ошибка подключения к векторной БД:", err)
+		return
+	}
+
+	startTime := time.Now()
+
+	results, docs, scores, answer, _, chunkIDs, tokensUsed, _ := rag.Ask(
+		context.Background(),
+		*cfg,
+		*query,
+		safeUser,
+		[]map[string]string{},
+		vectorClient,
+	)
+
+	found := false // проверяю порог
+	for i := 0; i < len(scores); i++ {
+		if scores[i] >= cfg.Retrieval.MinScore {
+			found = true
+			break
+		}
+	}
+
+	if !found { // возврат JSON с пустым sources
+		resp := Response{
+			Query:      *query,
+			Answer:     "В документации нет информации по этому вопросу",
+			Sources:    []Source{},
+			Model:      cfg.LLM.Model,
+			TokensUsed: 0,
+			DurationMs: 0,
+		}
+		jsonData, _ := json.MarshalIndent(resp, "", "  ")
+		fmt.Println(string(jsonData))
+		return
+	}
+
+	var sources []Source // собираю источники
+	for i := 0; i < len(results); i++ {
+		snippet := results[i]
+		if len(snippet) > 100 {
+			snippet = snippet[:100] + "..."
+		}
+		sources = append(sources, Source{
+			DocID:   docs[i],
+			Score:   scores[i],
+			Snippet: snippet,
+			ChunkID: chunkIDs[i],
+		})
+	}
+
+	duration := time.Since(startTime).Milliseconds()
+
+	resp := Response{ // собираю ответ
+		Query:      *query,
+		Answer:     answer,
+		Sources:    sources,
+		Model:      cfg.LLM.Model,
+		TokensUsed: tokensUsed,
+		DurationMs: duration,
+	}
+
+	jsonData, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		fmt.Println("Ошибка формирования:", err)
+		return
+	}
+
+	if *outFile != "" {
+		err := os.WriteFile(*outFile, jsonData, 0644)
+		if err != nil {
+			fmt.Println("Ошибка сохранения в файл:", err)
+		} else {
+			fmt.Println("Результат сохранён в", *outFile)
+		}
+	} else {
+		fmt.Println(string(jsonData))
+	}
+}
+
+func serveCmd() {
+	serveFlag := flag.NewFlagSet("serve", flag.ExitOnError)
+	addr := serveFlag.String("addr", ":8080", "Адрес для сервера")
+	configFile := serveFlag.String("config", "configs/config.yml", "Путь к конфигу")
+
+	serveFlag.Parse(os.Args[2:])
+
+	cfg, err := config.LoadConfig(*configFile)
+	if err != nil {
+		fmt.Println("Ошибка загрузки конфига:", err)
+		return
+	}
+
+	vectorClient, err := createVectorClient(cfg)
+	if err != nil {
+		fmt.Println("Ошибка подключения к векторной БД:", err)
+		return
+	}
+
+	server.RunWeb(cfg, *addr, vectorClient)
+}
+
+func indexCmd() {
+	indexFlag := flag.NewFlagSet("index", flag.ExitOnError)
+	userID := indexFlag.String("user", "", "Имя пользователя")
+	configFile := indexFlag.String("config", "configs/config.yml", "Путь к конфигу")
+
+	indexFlag.Parse(os.Args[2:])
+
+	if *userID == "" {
+		fmt.Println("Ошибка: требуется --user")
+		indexFlag.Usage()
+		os.Exit(2)
+	}
+
+	cfg, err := config.LoadConfig(*configFile)
+	if err != nil {
+		fmt.Println("Ошибка загрузки конфига:", err)
+		return
+	}
+
+	safeUser, err := safety.SanitizeAndValidateUser(*userID) // проверка имени пользователя
+	if err != nil {
+		fmt.Println("Ошибка: неверное имя пользователя:", err)
+		return
+	}
+
+	vectorClient, err := createVectorClient(cfg)
+	if err != nil {
+		fmt.Println("Ошибка подключения к векторной БД:", err)
+		return
+	}
+
+	idx := indexer.NewIndexer(cfg, vectorClient, safeUser)
+	err = idx.Index(context.Background())
+	if err != nil {
+		fmt.Println("Ошибка индексации:", err)
+		return
+	}
+
+	fmt.Println("Индексация завершена")
+}
+
+func evalCmd() {
+	evalFlag := flag.NewFlagSet("eval", flag.ExitOnError)
+	userID := evalFlag.String("user", "", "Имя пользователя")
+	configFile := evalFlag.String("config", "configs/config.yml", "Путь к конфигу")
+	datasetPath := evalFlag.String("dataset", "testdata/control/questions.jsonl", "Путь к JSONL с вопросами")
+
+	evalFlag.Parse(os.Args[2:])
+
+	if *userID == "" {
+		fmt.Println("Ошибка: требуется --user")
+		evalFlag.Usage()
+		os.Exit(2)
+	}
+
+	cfg, err := config.LoadConfig(*configFile)
+	if err != nil {
+		fmt.Println("Ошибка загрузки конфига:", err)
+		return
+	}
+
+	if _, err := safety.SanitizeAndValidateUser(*userID); err != nil {  // проверка имени пользователя
+		fmt.Println("Ошибка: неверное имя пользователя:", err)
+		return
+	}
+
+	vectorClient, err := createVectorClient(cfg)
+	if err != nil {
+		fmt.Println("Ошибка подключения к векторной БД:", err)
+		return
+	}
+
+	eval.RunEval(cfg, *datasetPath, vectorClient)
+}
+func compareCmd() {
+	compareFlag := flag.NewFlagSet("compare", flag.ExitOnError)
+	userID := compareFlag.String("user", "demo", "Имя пользователя")
+	configFile := compareFlag.String("config", "configs/config.yml", "Путь к конфигу")
+
+	compareFlag.Parse(os.Args[2:])
+
+	cfg, err := config.LoadConfig(*configFile)
+	if err != nil {
+		fmt.Println("Ошибка загрузки конфига:", err)
+		return
+	}
+
+	safeUser, err := safety.SanitizeAndValidateUser(*userID)
+	if err != nil {
+		fmt.Println("Ошибка: неверное имя пользователя:", err)
+		return
+	}
+
+	vectorClient, err := createVectorClient(cfg)
+	if err != nil {
+		fmt.Println("Ошибка подключения к векторной БД:", err)
+		return
+	}
+
+	eval.CompareANNvsExact(cfg, safeUser, vectorClient)
+}
+
+func demoCmd() {
+	demoFlag := flag.NewFlagSet("demo", flag.ExitOnError)
+	configFile := demoFlag.String("config", "configs/config.yml", "Путь к конфигу")
+	demoFlag.Parse(os.Args[2:])
+
+	cfg, err := config.LoadConfig(*configFile)
+	if err != nil {
+		fmt.Println("Ошибка загрузки конфига:", err)
+		return
+	}
+	fakeClient := vector.NewFakeVectorStore()
+	fmt.Println("Использую FakeVectorStore (mock-режим)")
+	runDemo(cfg, "demo", fakeClient)
+}
+
+func createVectorClient(cfg *config.Config) (vector.VectorStore, error) {
+	if cfg.Embeddings.Provider == "mock" {
+		return vector.NewFakeVectorStore(), nil
+	}
+
+	client, err := vector.NewQdrantClient()
+	if err != nil {
+		return nil, err
+	}
+	if err := client.Ping(context.Background()); err != nil {
+		return nil, err
+	}
+	client.VectorSize = cfg.Embeddings.VectorSize
+	return client, nil
 }
