@@ -17,7 +17,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"net"
 )
+func getClientIP(r *http.Request) string{
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+    if err != nil {
+        return r.RemoteAddr
+    }
+    return host
+}
 
 const maxHistorySize = 50
 
@@ -126,24 +134,6 @@ func handleLogin(w http.ResponseWriter, r *http.Request) { //обработчи�
 		})
 		return
 	}
-
-	loginMutex.Lock()
-	if blockTime, exists := loginBlocked[req.Username]; exists {
-		if time.Now().Before(blockTime) {
-			loginMutex.Unlock()
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusTooManyRequests)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"success": false,
-				"error":   "Слишком много попыток. Попробуйте через 5 минут",
-			})
-			return
-		}
-		delete(loginBlocked, req.Username)
-		delete(loginAttempts, req.Username)
-	}
-	loginMutex.Unlock()
-
 	safeUsername, err := safety.SanitizeAndValidateUser(req.Username)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -154,13 +144,32 @@ func handleLogin(w http.ResponseWriter, r *http.Request) { //обработчи�
 		})
 		return
 	}
+	clientIP := getClientIP(r)
+	key := clientIP + "_" + safeUsername
+
+	loginMutex.Lock()
+	if blockTime, exists := loginBlocked[key]; exists {
+		if time.Now().Before(blockTime) {
+			loginMutex.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error": "Слишком много попыток. Попробуйте через 5 минут",
+			})
+			return
+		}
+		delete(loginBlocked, key)
+		delete(loginAttempts, key)
+	}
+	loginMutex.Unlock()
 
 	ok := database.CheckUser(safeUsername, req.Password)
 
 	if ok {
 		loginMutex.Lock() //успешный-сброс
-		delete(loginAttempts, req.Username)
-		delete(loginBlocked, req.Username)
+		delete(loginAttempts, key)
+		delete(loginBlocked, key)
 		loginMutex.Unlock()
 
 		token, err := auth.MakeToken(safeUsername)
@@ -177,9 +186,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) { //обработчи�
 		})
 	} else {
 		loginMutex.Lock() //неудачный вход
-		loginAttempts[req.Username]++
-		if loginAttempts[req.Username] >= 5 {
-			loginBlocked[req.Username] = time.Now().Add(5 * time.Minute)
+		loginAttempts[key]++
+		if loginAttempts[key] >= 5 {
+			loginBlocked[key] = time.Now().Add(5 * time.Minute)
 		}
 		loginMutex.Unlock()
 
