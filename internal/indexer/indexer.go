@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"os"
 	"path/filepath"
+	"strings" 
 )
 
 type Indexer struct { //структура индексации
@@ -119,6 +120,11 @@ func (i *Indexer) Index(ctx context.Context) error {
 }
 
 func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
+	if len(strings.TrimSpace(doc.Text)) == 0 {
+        fmt.Printf("Документ %s пуст, пропускаем\n", doc.Name)
+        return nil
+    }
+	
 	chunks := chunk.SplitIntelligent(doc.Text, doc.Name, i.Config.Chunking.MaxTokens, i.Config.Chunking.OverlapTokens) // режу на чанки
 
 	fmt.Printf("Документ: %s, страниц: %d\n", doc.Name, len(doc.Pages))
