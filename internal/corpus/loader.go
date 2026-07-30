@@ -78,10 +78,16 @@ func LoadDocuments(path string, formats []string) ([]Document, error) { //format
 				fmt.Printf("Ошибка чтения файла %s: %v\n", name, err)
 				continue
 			}
-
-			text = string(data)
-			pages = nil
-			pageOffsets = nil
+			if ext == ".html" {
+				text = RemoveHTMLTags(string(data))
+				text = NormalizeNext(text)
+				fmt.Printf("HTML очищен: %d символов\n", len(text))
+				fmt.Printf("Текст: %s\n", text)
+				pages = nil
+				pageOffsets = nil
+				} else {
+					text = string(data)
+				}
 		}
 
 		doc := Document{ // создаю документ и нормализую текст
