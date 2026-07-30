@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 type EvalQuestion struct {
@@ -54,22 +55,22 @@ func RunEval(cfg *config.Config, datasetPath string, vectorClient vector.VectorS
 		return
 	}
 	safeUser, err := safety.SanitizeAndValidateUser(userForEval)
-    if err != nil {
-        fmt.Printf("Ошибка: неверное имя пользователя: %v\n", err)
-        return
-    }
-    userForEval = safeUser
+	if err != nil {
+		fmt.Printf("Ошибка: неверное имя пользователя: %v\n", err)
+		return
+	}
+	userForEval = safeUser
 
 	if cfg.Embeddings.Provider == "mock" {
-        os.Remove("./.docsearch_index_" + userForEval + ".json")
-        fmt.Println("Индексирую документы для eval...")
-        idx := indexer.NewIndexer(cfg, vectorClient, userForEval)
-        if err := idx.Index(context.Background()); err != nil {
-            fmt.Println("Ошибка индексации для eval:", err)
-            return
-        }
-        fmt.Println("Индексация завершена")
-    }
+		os.Remove("./.docsearch_index_" + userForEval + ".json")
+		fmt.Println("Индексирую документы для eval...")
+		idx := indexer.NewIndexer(cfg, vectorClient, userForEval)
+		if err := idx.Index(context.Background()); err != nil {
+			fmt.Println("Ошибка индексации для eval:", err)
+			return
+		}
+		fmt.Println("Индексация завершена")
+	}
 
 	userDir := "docs/" + userForEval // проверка существует ли папка пользователя
 	if _, err := os.Stat(userDir); os.IsNotExist(err) {
@@ -245,23 +246,32 @@ func RunEval(cfg *config.Config, datasetPath string, vectorClient vector.VectorS
 func CompareANNvsExact(cfg *config.Config, userID string, vectorClient vector.VectorStore) {
 	fmt.Println("\n Сравнение ANN и Точный поиск")
 
+	if cfg.Embeddings.Provider == "mock" {
+		fmt.Println("Внимание: Сравнение ANN и Exact в mock-режиме не отражает работу ANN.")
+		fmt.Println("Для реального сравнения используйте embeddings.provider: local или openrouter")
+	}
+
+	var totalExactTime, totalAnnTime time.Duration // замеры времени
+	var matches int                                // количество совпадений top-1
+	totalQuestions := 0                            // всего вопросов
+
 	safeUser, err := safety.SanitizeAndValidateUser(userID)
 	if err != nil {
 		fmt.Printf("Ошибка: неверное имя пользователя: %v\n", err)
 		return
 	}
 	userID = safeUser
-	
-    if cfg.Embeddings.Provider == "mock" {   // если mock режим сначала индексируем
-         os.Remove("./.docsearch_index_" + userID + ".json")
-        fmt.Println("Индексирую документы для compare...")
-        idx := indexer.NewIndexer(cfg, vectorClient, userID)
-        if err := idx.Index(context.Background()); err != nil {
-            fmt.Println("Ошибка индексации для compare:", err)
-            return
-        }
-        fmt.Println("Индексация завершена")
-    }
+
+	if cfg.Embeddings.Provider == "mock" { // если mock режим сначала индексируем
+		os.Remove("./.docsearch_index_" + userID + ".json")
+		fmt.Println("Индексирую документы для compare...")
+		idx := indexer.NewIndexer(cfg, vectorClient, userID)
+		if err := idx.Index(context.Background()); err != nil {
+			fmt.Println("Ошибка индексации для compare:", err)
+			return
+		}
+		fmt.Println("Индексация завершена")
+	}
 
 	file, err := os.Open("testdata/control/questions.jsonl")
 	if err != nil {
@@ -349,13 +359,20 @@ func CompareANNvsExact(cfg *config.Config, userID string, vectorClient vector.Ve
 			vectors = append(vectors, vec64)
 		}
 
+		startExact := time.Now()  //замер поиска точного
 		_, exactDocs, exactScores := retrieve.Search(texts, docs, vectors, queryVec, cfg.Retrieval.TopK) // полный перебор
+		exactDuration := time.Since(startExact)
+		totalExactTime += exactDuration
 
 		vec32 := make([]float32, len(vec)) // ANN поиск
 		for i, v := range vec {
 			vec32[i] = float32(v)
 		}
+		startAnn := time.Now() //замер ann
 		annResults, err := vectorClient.Search(context.Background(), vector.CollectionName, vec32, cfg.Retrieval.TopK, userID)
+		annDuration := time.Since(startAnn)
+		totalAnnTime += annDuration
+
 		if err != nil {
 			fmt.Println("Ошибка ANN поиска:", err)
 			continue
@@ -389,16 +406,19 @@ func CompareANNvsExact(cfg *config.Config, userID string, vectorClient vector.Ve
 		}
 
 		if len(exactDocs) > 0 && len(annResults) > 0 {
-
 			annPayload, ok := annResults[0]["payload"].(map[string]interface{})
 			if ok {
 				annDocID, ok := annPayload["doc_id"].(string)
-				if ok && exactDocs[0] == annDocID {
-					fmt.Println("ANN и точный поиск дали одинаковый первый результат")
-				} else {
-					fmt.Printf("Результаты различаются:\n")
-					fmt.Printf("ANN: %s\n", annDocID)
-					fmt.Printf("Точный: %s\n", exactDocs[0])
+				if ok {
+					totalQuestions++
+					if exactDocs[0] == annDocID {
+						matches++
+						fmt.Println("ANN и точный поиск дали одинаковый первый результат")
+					} else {
+						fmt.Printf("Результаты различаются:\n")
+						fmt.Printf("ANN: %s\n", annDocID)
+						fmt.Printf("Точный: %s\n", exactDocs[0])
+					}
 				}
 			}
 		}
@@ -406,8 +426,32 @@ func CompareANNvsExact(cfg *config.Config, userID string, vectorClient vector.Ve
 		fmt.Println()
 	}
 
-	fmt.Println("Вывод ")
-	fmt.Println("ANN работает быстрее, но может давать небольшую погрешность")
-	fmt.Println("Точный поиск даёт 100% точность, но медленнее")
-	fmt.Println("Для больших корпусов рекомендуется использовать ANN")
+fmt.Println("\n--- Сравнение скоростей ---")
+fmt.Printf("Точный поиск: %.3f мс\n", float64(totalExactTime.Nanoseconds())/1e6)
+fmt.Printf("ANN: %.3f мс\n", float64(totalAnnTime.Nanoseconds())/1e6)
+
+if totalQuestions > 0 {
+    fmt.Printf("Совпадение top-1: %d из %d (%.0f%%)\n", matches, totalQuestions, float64(matches)/float64(totalQuestions)*100)
+}
+
+fmt.Println("\n--- Вывод ---")
+if cfg.Embeddings.Provider == "mock" {
+    fmt.Println("В mock-режиме точный поиск выполняется в памяти и всегда быстрее.")
+    fmt.Println("Для реального сравнения используйте embeddings.provider: local или openrouter")
+} else if totalAnnTime < totalExactTime {
+    fmt.Printf("ANN (%.3f мс) быстрее точного поиска (%.3f мс)\n",
+        float64(totalAnnTime.Nanoseconds())/1e6,
+        float64(totalExactTime.Nanoseconds())/1e6)
+    fmt.Println("Рекомендуется использовать ANN для больших корпусов")
+} else if totalExactTime < totalAnnTime {
+    fmt.Printf("Точный поиск (%.3f мс) быстрее ANN (%.3f мс)\n",
+        float64(totalExactTime.Nanoseconds())/1e6,
+        float64(totalAnnTime.Nanoseconds())/1e6)
+    fmt.Println("На малых наборах данных полный перебор может быть эффективнее")
+} else {
+    fmt.Println("Время поиска одинаково")
+}
+fmt.Println("\n--- Важно ---")
+fmt.Println("На малых наборах данных (13 чанков) точный поиск в памяти всегда быстрее HTTP-запроса к Qdrant.")
+fmt.Println("Сравнение ANN становится эффективным на больших корпусах (тысячи и миллионы документов).")
 }
