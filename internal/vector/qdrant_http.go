@@ -246,6 +246,15 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
+	var bodyBytes []byte
+    if req.Body != nil {
+        var err error
+        bodyBytes, err = io.ReadAll(req.Body)
+        req.Body.Close()
+        if err != nil {
+            return nil, fmt.Errorf("ошибка чтения тела запроса: %w", err)
+        }
+    }
 
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -253,13 +262,11 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 			fmt.Printf("Повторная попытка %d из %d\n", attempt+1, maxRetries)
 			time.Sleep(time.Duration(attempt) * time.Second)
 		}
-		if req.GetBody != nil {
-			body, err := req.GetBody()
-			if err != nil {
-				return nil, fmt.Errorf("ошибка получения тела запроса: %w", err)
-			}
-			req.Body = body
-		}
+		if len(bodyBytes) > 0 {
+            req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+            req.ContentLength = int64(len(bodyBytes))
+        }
+
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -268,7 +275,7 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			return resp, nil
+            return resp, nil
 		}
 
 		body, _ := io.ReadAll(resp.Body)
@@ -285,9 +292,13 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 }
 
 func (q *QdrantClient) GetAllVectors(ctx context.Context, name string, userID string) ([]map[string]interface{}, error) { //все векторы из бд
+    var allPoints []map[string]interface{}
+	var offset interface{}
+	limit:=100
 
+	for{
 	d := map[string]interface{}{
-		"limit":        100,
+		"limit":        limit,
 		"with_vector":  true,
 		"with_payload": true,
 	}
@@ -303,6 +314,9 @@ func (q *QdrantClient) GetAllVectors(ctx context.Context, name string, userID st
 				},
 			},
 		}
+	}
+	if offset!=nil{
+		d["offset"]=offset
 	}
 
 	j, err := json.Marshal(d)
@@ -320,7 +334,6 @@ func (q *QdrantClient) GetAllVectors(ctx context.Context, name string, userID st
 	if err != nil {
 		return nil, fmt.Errorf("ошибка запроса к Qdrant: %w", err)
 	}
-	defer r.Body.Close()
 
 	var res struct {
 		Result struct {
@@ -329,21 +342,28 @@ func (q *QdrantClient) GetAllVectors(ctx context.Context, name string, userID st
 				Vector  []float32              `json:"vector"`
 				Payload map[string]interface{} `json:"payload"`
 			} `json:"points"`
+			NextPageOffset interface{} `json:"next_page_offset"`
 		} `json:"result"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&res); err != nil {
+		r.Body.Close()
 		return nil, fmt.Errorf("ошибка парсинга ответа: %w", err)
 	}
+	r.Body.Close()
 
-	out := []map[string]interface{}{}
 	for _, point := range res.Result.Points {
-		out = append(out, map[string]interface{}{
+		allPoints = append(allPoints, map[string]interface{}{
 			"id":      point.Id,
 			"vector":  point.Vector,
 			"payload": point.Payload,
 		})
 	}
+	if res.Result.NextPageOffset==nil{ // Если следующей страницы нет — выходим
+		break
+	}
+	offset=res.Result.NextPageOffset
+}
+return allPoints,nil
 
-	return out, nil
 }
