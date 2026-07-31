@@ -20,7 +20,7 @@ func GetEmbedding(ctx context.Context, text string, cfg *config.Config) ([]float
 			vectorSize = 768
 		}
 
-		wordPositions := map[string]int{ // словарик слово позиция в векторе
+		wordPositions := map[string]int{ // словарик, слово позиция в векторе
 			"rag": 0, "retrieval": 0, "augmented": 0, "generation": 0,
 			"эмбеддинг": 1, "эмбеддинги": 1, "embedding": 1, "vector": 1, "вектор": 1,
 			"поиск": 2, "search": 2,
@@ -100,8 +100,8 @@ func GetEmbedding(ctx context.Context, text string, cfg *config.Config) ([]float
 		if resp.StatusCode!=200{ //проверка статуса
 			body,_:=io.ReadAll(resp.Body)
 			resp.Body.Close()
-		
-		if resp.StatusCode == 408 || resp.StatusCode == 429 || resp.StatusCode >= 500{    // ретраю 408, 429 и 5xx
+			
+			if resp.StatusCode == 408 || resp.StatusCode == 429 || resp.StatusCode >= 500{    // ретраю 408, 429 и 5xx
 			lastErr=fmt.Errorf("LM Studio ошибка %d: %s", resp.StatusCode, string(body))
 			continue
 		}
