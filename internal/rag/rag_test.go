@@ -96,3 +96,66 @@ func TestTenantIsolation(t *testing.T) {
 		t.Logf("userA видит свои документы: %d", len(results))
 	}
 }
+
+func TestAskWithFake(t *testing.T) {
+	fakeClient := vector.NewFakeVectorStore()
+
+	err := fakeClient.Save(context.Background(), "documents", "test1", []float32{0.1, 0.2, 0.3}, map[string]interface{}{    // сохр  тестовые данные
+		"chunk_text": "RAG - это Retrieval-Augmented Generation",
+		"doc_id":     "doc1.md",
+		"user_id":    "testuser",
+		"page":       1,
+	})
+	if err != nil {
+		t.Fatalf("Ошибка сохранения: %v", err)
+	}
+
+	if len(fakeClient.Points) == 0 {   // проверка что данные сохранились
+		t.Fatal("FakeVectorStore пуст")
+	}
+	t.Logf("Сохранено %d точек", len(fakeClient.Points))
+
+	// Проверяем, что Search работает
+	results, err := fakeClient.Search(context.Background(), "documents", []float32{0.1, 0.2, 0.3}, 5, "testuser")
+	if err != nil {
+		t.Fatalf("Ошибка Search: %v", err)
+	}
+	t.Logf("Search вернул %d результатов", len(results))
+	if len(results) > 0 {
+		t.Logf("Первый результат: score=%.4f", results[0]["score"].(float64))
+	}
+
+	cfg := config.Config{}
+	cfg.Embeddings.Provider = "mock"
+	cfg.LLM.Provider = "mock"
+	cfg.Retrieval.TopK = 5
+	cfg.Retrieval.MinScore = 0.0 
+	cfg.Embeddings.VectorSize = 768
+
+	texts, docs, _, answer, _, _, _, _ := Ask(
+		context.Background(),
+		cfg,
+		"Что такое RAG?",
+		"testuser",
+		[]map[string]string{},
+		fakeClient,
+	)
+
+	if len(texts) == 0 {
+		t.Error("Ask не вернул чанки")
+	} else {
+		t.Logf("Найдено %d чанков", len(texts))
+	}
+
+	if len(docs) == 0 {
+		t.Error("Ask не вернул документы")
+	} else {
+		t.Logf("Найдено %d документов", len(docs))
+	}
+
+	if answer == "" {
+		t.Error("Ответ пустой")
+	} else {
+		t.Logf("Ответ: %s", answer)
+	}
+}
