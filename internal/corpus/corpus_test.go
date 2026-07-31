@@ -12,7 +12,7 @@ func TestReadPDF(t *testing.T) { // проверяю, что PDF читаетс�
 		t.Skip("Нет test.pdf, пропускаем тест")
 		return
 	}
-	text, pages, pageOffsets, err := readPDF("docs/test.pdf")
+	text, pages, _, err := readPDF("docs/test.pdf")
 	if err != nil {
 		t.Skip("Ошибка чтения test.pdf")
 		return
