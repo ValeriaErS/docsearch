@@ -31,16 +31,16 @@
         }
 
         .msg .timing {
-        margin-top: 8px;
-        font-size: 12px;
-    opacity: 0.4;
-    text-align: right;
-    border-top: 1px solid rgba(255,255,255,0.05);
-    padding-top: 6px;
-    display: block !important;
-    font-family: monospace;
-    font-size: 11px;
-}
+            margin-top: 8px;
+            font-size: 12px;
+            opacity: 0.4;
+            text-align: right;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            padding-top: 6px;
+            display: block !important;
+            font-family: monospace;
+            font-size: 11px;
+        }
 
         .background {
             position: absolute;
@@ -314,7 +314,6 @@
     </div>
 
     <script>
-        
         const token = localStorage.getItem('token');
         const user = localStorage.getItem('user');
         const USER = user || 'Валерия';
@@ -341,30 +340,35 @@
                 msg.appendChild(src);
             }
 
-            if (!isUser && timings) {
-        const timeDiv = document.createElement('div');
-        timeDiv.className = 'timing';
-        timeDiv.style.fontSize = '12px';
-        timeDiv.style.opacity = '0.5';
-        timeDiv.style.marginTop = '6px';
-        timeDiv.style.borderTop = '1px solid rgba(255,255,255,0.05)';
-        timeDiv.style.paddingTop = '6px';
-        timeDiv.style.whiteSpace = 'pre-line';
-        timeDiv.style.fontFamily = 'monospace';
-        timeDiv.style.fontSize = '11px';
+            if (!isUser && timings && timings.total !== undefined) {
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'timing';
+                timeDiv.style.fontSize = '12px';
+                timeDiv.style.opacity = '0.5';
+                timeDiv.style.marginTop = '6px';
+                timeDiv.style.borderTop = '1px solid rgba(255,255,255,0.05)';
+                timeDiv.style.paddingTop = '6px';
+                timeDiv.style.whiteSpace = 'pre-line';
+                timeDiv.style.fontFamily = 'monospace';
+                timeDiv.style.fontSize = '11px';
 
-        let text = `Общее время: ${timings.total.toFixed(2)} сек\n`;
-        text += `── Эмбеддинг: ${timings.embed.toFixed(2)} сек\n`;
-        text += `── Поиск: ${timings.search.toFixed(2)} сек\n`;
-        text += `── LLM: ${timings.llm.toFixed(2)} сек`;
+                const total = timings.total ? timings.total.toFixed(2) : '0.00';
+                const embed = timings.embed ? timings.embed.toFixed(2) : '0.00';
+                const search = timings.search ? timings.search.toFixed(2) : '0.00';
+                const llm = timings.llm ? timings.llm.toFixed(2) : '0.00';
 
-        timeDiv.textContent = text;
-        msg.appendChild(timeDiv);
-    }
+                let text = `Общее время: ${total} сек\n`;
+                text += `── Эмбеддинг: ${embed} сек\n`;
+                text += `── Поиск: ${search} сек\n`;
+                text += `── LLM: ${llm} сек`;
 
-    chat.appendChild(msg);
-    chat.scrollTop = chat.scrollHeight;
-}
+                timeDiv.textContent = text;
+                msg.appendChild(timeDiv);
+            }
+
+            chat.appendChild(msg);
+            chat.scrollTop = chat.scrollHeight;
+        }
 
         async function sendQuestion() {
             const q = input.value.trim();
