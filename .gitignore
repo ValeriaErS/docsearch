@@ -79,3 +79,6 @@ docs/*/
 
 # Old eval files
 testdata/eval.json
+
+# Embedding cache
+.cache/
