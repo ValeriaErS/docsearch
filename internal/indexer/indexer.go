@@ -135,11 +135,37 @@ func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
 
 		fmt.Printf("Чанк %d: страница %d, позиция %d\n", idx+1, page, ch.StartPos)
 
-		vec, err := embed.GetEmbedding(ctx, ch.Text, i.Config) // получаю эмбеддинг
-		if err != nil {
-			fmt.Println("Ошибка эмбеддинга:", err)
-			return err
+		
+		var cache *EmbeddingCache  // создаю кеш один раз для всего документа
+		if i.Config.Embeddings.Provider == "local" {
+			cache = NewEmbeddingCache()
 		}
+		
+		
+		vec, err := func() ([]float64, error) {  // внутри цикла по чанкам проверяю кеш
+		if cache != nil {
+			if cached, ok := cache.Get(ch.Text); ok {
+				fmt.Printf("Чанк %d: эмбеддинг взят из кеша\n", idx+1)
+				return cached, nil
+        }
+    }
+	
+	vec, err := embed.GetEmbedding(ctx, ch.Text, i.Config)  // считаю эмбеддинг
+    if err != nil {
+        return nil, err
+    }
+
+    if cache != nil {
+        cache.Save(ch.Text, vec)
+    }
+
+    return vec, nil
+}()
+
+if err != nil {
+    fmt.Println("Ошибка эмбеддинга:", err)
+    return err
+}
 
 		vec32 := []float32{}
 		for _, v := range vec {
