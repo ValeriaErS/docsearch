@@ -359,11 +359,78 @@ func (q *QdrantClient) GetAllVectors(ctx context.Context, name string, userID st
 			"payload": point.Payload,
 		})
 	}
-	if res.Result.NextPageOffset==nil{ // Если следующей страницы нет — выходим
+	if res.Result.NextPageOffset==nil{ // если следующей страницы нет  выхожу
 		break
 	}
 	offset=res.Result.NextPageOffset
 }
 return allPoints,nil
-
 }
+
+func (q *QdrantClient) SearchText(ctx context.Context, name string, query string, limit int, userID string) ([]map[string]interface{}, error) {   //  выполняет полнотекстовый поиск по полю text
+	
+	if err := q.EnsureTextIndex(ctx, name); err != nil {
+		fmt.Printf("Ошибка создания текстового индекса: %v\n", err)
+		return []map[string]interface{}{}, nil
+	}
+
+	searchRequest := map[string]interface{}{
+		"filter": map[string]interface{}{
+			"must": []map[string]interface{}{
+				{
+					"key": "user_id",
+					"match": map[string]interface{}{
+						"value": userID,
+					},
+				},
+			},
+		},
+		"limit": limit,
+		"with_payload": true,
+		"search": map[string]interface{}{
+			"field": "text",
+			"query": query,
+		},
+	}
+
+	jsonData, err := json.Marshal(searchRequest)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка маршалинга: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", q.url("/collections/"+name+"/points/search"), bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := retryRequest(req, 3)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Result []struct {
+			Id      string                 `json:"id"`
+			Score   float64                `json:"score"`
+			Payload map[string]interface{} `json:"payload"`
+		} `json:"result"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	out := []map[string]interface{}{}
+	for _, item := range result.Result {
+		out = append(out, map[string]interface{}{
+			"id": item.Id,
+			"score": item.Score,
+			"payload": item.Payload,
+		})
+	}
+
+	return out, nil
+}
+
