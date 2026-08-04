@@ -3,6 +3,8 @@ package vector
 import (
 	"context"
 	"math"
+	"sort"   
+	"strings"
 )
 
 type FakeVectorStore struct {
@@ -181,4 +183,53 @@ func cosineSimilarity(a, b []float64) float64 { //считает косинус�
 		return 0
 	}
 	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
+    }
+	
+func (f *FakeVectorStore) SearchText(ctx context.Context, name string, query string, limit int, userID string) ([]map[string]interface{}, error) { //имитация полнотекстового поиска
+	queryWords := strings.Fields(strings.ToLower(query))
+
+	var results []map[string]interface{}
+	for _, point := range f.Points {
+		payload, ok := point["payload"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		pointUserID, ok := payload["user_id"].(string)
+		if !ok || pointUserID != userID {
+			continue
+		}
+
+		chunkText, ok := payload["chunk_text"].(string)
+		if !ok {
+			continue
+		}
+
+		score := 0.0 // счет совпадения ключевых слов
+		textLower := strings.ToLower(chunkText)
+		for _, word := range queryWords {
+			if len(word) > 2 && strings.Contains(textLower, word) {
+				score += 1.0
+			}
+		}
+
+		if score > 0 {
+			score = score / float64(len(queryWords))
+			results = append(results, map[string]interface{}{
+				"id":      point["id"],
+				"score":   score,
+				"payload": payload,
+			})
+		}
+	}
+
+	sort.Slice(results, func(i, j int) bool {  // сортирует по оценке
+		return results[i]["score"].(float64) > results[j]["score"].(float64)
+	})
+
+	if len(results) > limit {
+		results = results[:limit]
+	}
+
+	return results, nil
 }
