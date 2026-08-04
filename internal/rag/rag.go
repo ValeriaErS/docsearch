@@ -8,13 +8,44 @@ import (
 	"docsearch/internal/vector"
 	"fmt"
 	"time"
+	"docsearch/internal/query"
 )
 
 func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
 	startTotal := time.Now()
 
+	queryForSearch := question
+    rewriter := query.NewQueryRewriter(&cfg)
+
+	fmt.Printf("Рерайтер создан, EnableRewriting=%v, EnableHyDE=%v\n", 
+    cfg.Retrieval.EnableRewriting, cfg.Retrieval.EnableHyDE)
+
+    if cfg.Retrieval.EnableHyDE {   // если включен HyDE то генерирую гипотетический ответ
+        hypothetical, err := rewriter.GenerateHyDE(ctx, question)
+        if err == nil && len(hypothetical) > 20 {
+            queryForSearch = hypothetical
+            fmt.Printf("HyDE сгенерирован (длина: %d символов)\n", len(hypothetical))
+        } else if err != nil {
+            fmt.Printf("HyDE ошибка: %v, используем оригинал\n", err)
+        }
+    }
+
+    if cfg.Retrieval.EnableRewriting && queryForSearch == question {  //если HyDE не использовался
+        rewritten, err := rewriter.Rewrite(ctx, question, history)
+        if err == nil && len(rewritten) > 5 && rewritten != question {
+            queryForSearch = rewritten
+            fmt.Printf("Запрос переписан: '%s' → '%s'\n", question, rewritten)
+        } else if err != nil {
+            fmt.Printf("Rewriting ошибка: %v\n", err)
+        }
+    }
+
+    if queryForSearch != question {  //финальный запрос
+        fmt.Printf("Поиск по запросу: '%s'\n", queryForSearch)
+    }
+
 	startEmbed := time.Now() //эмбеддинг
-	vec, err := embed.GetEmbedding(ctx, question, &cfg)
+	vec, err := embed.GetEmbedding(ctx, queryForSearch, &cfg)
 	if err != nil {
 		return []string{}, []string{}, []float64{}, "не могу понять ваш вопрос", []int{}, []string{}, 0, map[string]float64{}
 	}
@@ -129,12 +160,15 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 			question, len(texts), docs)
 		llmDuration = 0
 	} else {
+		fmt.Printf("Вызываю LLM с %d чанками\n", len(texts))
 		startLLM := time.Now()
 		var err error
 		answer, tokensUsed, err = llm.GetAnswerWithHistory(ctx, question, texts, docs, pages, history, &cfg)
 		if err != nil {
+			fmt.Printf("Ошибка LLM: %v\n", err)
 			return texts, docs, scores, "LLM не отвечает", pages, chunkIDs, 0, map[string]float64{}
 		}
+		fmt.Printf("LLM ответила, длина: %d символов\n", len(answer))
 		llmDuration = time.Since(startLLM).Seconds()
 	}
 
