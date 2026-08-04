@@ -183,6 +183,7 @@ if err != nil {
 			"user_id":     i.UserID,
 			"page":        page,
 			"chunk_id":    id,
+			"text":        ch.Text, 
 		}
 
 		err = i.VectorClient.Save(ctx, vector.CollectionName, id, vec32, data)
