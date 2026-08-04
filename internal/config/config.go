@@ -28,7 +28,8 @@ type Config struct {
 		TopK     int     `yaml:"top_k"`
 		MinScore float64 `yaml:"min_score"`
 		EnableRewriting  bool    `yaml:"enable_rewriting"`  
-        EnableHyDE       bool    `yaml:"enable_hyde"` 
+        EnableHyDE       bool    `yaml:"enable_hyde"`
+		HybridSearch     bool    `yaml:"hybrid_search"` 
 	} `yaml:"retrieval"`
 
 	LLM struct {
