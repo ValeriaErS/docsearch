@@ -13,8 +13,10 @@ embeddings:
     vector_size: 768
 
 retrieval:
-    top_k: 5
+    top_k: 10
     min_score: 0.2
+    enable_rewriting: true
+    enable_hyde: true
 
 llm:
     provider: "openrouter"

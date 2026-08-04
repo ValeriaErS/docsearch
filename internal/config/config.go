@@ -27,6 +27,8 @@ type Config struct {
 	Retrieval struct {
 		TopK     int     `yaml:"top_k"`
 		MinScore float64 `yaml:"min_score"`
+		EnableRewriting  bool    `yaml:"enable_rewriting"`  
+        EnableHyDE       bool    `yaml:"enable_hyde"` 
 	} `yaml:"retrieval"`
 
 	LLM struct {
