@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 	"docsearch/internal/query"
+	"docsearch/internal/retrieve"
 )
 
 func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
@@ -73,6 +74,34 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, []string{}, 0, map[string]float64{}
 	}
 	searchDuration := time.Since(startSearch).Seconds()
+	
+	textResults := []map[string]interface{}{}  //текстовый поиск
+	if cfg.Retrieval.HybridSearch {
+	fmt.Printf("Запускаю полнотекстовый поиск по запросу: '%s'\n", queryForSearch)
+	
+	if qdrantClient, ok := vectorClient.(*vector.QdrantClient); ok {  // пробую получить текстовые результаты
+		textResults, _ = qdrantClient.SearchText(ctx, vector.CollectionName, queryForSearch, cfg.Retrieval.TopK*3, userID)
+	} else if fakeClient, ok := vectorClient.(*vector.FakeVectorStore); ok {
+		textResults, _ = fakeClient.SearchText(ctx, vector.CollectionName, queryForSearch, cfg.Retrieval.TopK*3, userID)
+	}
+	
+	if len(textResults) > 0 {
+		fmt.Printf("Найдено %d результатов через полнотекстовый поиск\n", len(textResults))
+	} else {
+		fmt.Printf("Полнотекстовый поиск не вернул результатов\n")
+	}
+}
+
+
+var fusedResults []map[string]interface{}  //объединение
+if len(textResults) > 0 && cfg.Retrieval.HybridSearch {
+	fusedResults = retrieve.ReciprocalRankFusion(results, textResults)
+	fmt.Printf("Объединено %d векторных + %d текстовых → %d результатов\n", 
+		len(results), len(textResults), len(fusedResults))
+	results = fusedResults
+} else {
+	results = results[:cfg.Retrieval.TopK] 
+}
 
 	found := false              //проверка порога
 	for _, r := range results { //  приведения типов все v, ok := проверены
