@@ -9,4 +9,5 @@ type VectorStore interface {
 	CreateCollection(ctx context.Context, name string) error
 	Ping(ctx context.Context) error
 	GetAllVectors(ctx context.Context, name string, userID string) ([]map[string]interface{}, error)
+	SearchText(ctx context.Context, name string, query string, limit int, userID string) ([]map[string]interface{}, error) 
 }
