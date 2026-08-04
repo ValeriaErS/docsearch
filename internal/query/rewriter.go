@@ -27,11 +27,22 @@ func (r *QueryRewriter) Rewrite(ctx context.Context, query string, history []map
 	}
 
 	
-	systemPrompt := `Ты — помощник по переписыванию запросов.
-Перепиши вопрос в четкий поисковый запрос.
-Учти историю разговора.
-Удали лишние слова (привет, спасибо).
-Выдай ТОЛЬКО переписанный запрос.`
+	systemPrompt := `Ты — помощник по переписыванию запросов для поиска.
+Твоя задача — превратить вопрос пользователя в КОРОТКИЙ (2-5 слов) поисковый запрос.
+
+Примеры правильного переписывания:
+Вопрос: "Как это работает?" → "Принцип работы FileAuditor"
+Вопрос: "А как его настроить?" → "Настройка FileAuditor"
+Вопрос: "Что такое FileAuditor?" → "FileAuditor описание"
+Вопрос: "Где найти настройки?" → "Настройки FileAuditor"
+
+Правила:
+1. Запрос должен быть на русском языке
+2. Используй ключевые термины из вопроса
+3. Не добавляй слова "документация", "информация", "ответ"
+4. Выдай ТОЛЬКО переписанный запрос, без кавычек
+
+Перепиши этот вопрос:`
 
 	historyContext := ""
 	count := 0
@@ -56,8 +67,18 @@ func (r *QueryRewriter) Rewrite(ctx context.Context, query string, history []map
 		return query, nil 
 	}
 
-	rewritten = strings.TrimSpace(strings.Trim(rewritten, "\"'"))  // чищу ответ
-	if len(rewritten) < 5 {
+	rewritten = strings.TrimSpace(strings.Trim(rewritten, "\"'"))
+
+	
+	forbidden := []string{"нет информации", "не найдено", "не знаю", "no information", "User Safety", "Response Safety"}
+	for _, phrase := range forbidden {
+		if strings.Contains(strings.ToLower(rewritten), strings.ToLower(phrase)) {
+			fmt.Printf("Рерайтер вернул плохой ответ: '%s', используем оригинал\n", rewritten)
+			return query, nil
+		}
+	}
+
+	if len(rewritten) < 3 {
 		return query, nil
 	}
 
@@ -69,11 +90,25 @@ func (r *QueryRewriter) GenerateHyDE(ctx context.Context, query string) (string,
 		return query, nil
 	}
 
-	systemPrompt := `Ты — генератор гипотетических ответов.
-Придумай примерный ответ на вопрос, КАК ЕСЛИ БЫ ОН БЫЛ В ДОКУМЕНТАЦИИ.
-Не используй реальные факты — просто покажи, как выглядел бы ответ.
-Используй технические термины.
-Ответь на русском языке.`
+	systemPrompt := `Ты — генератор поискового запроса.
+Придумай КОРОТКИЙ (1 предложение) гипотетический ответ на вопрос.
+
+Примеры:
+Вопрос: "Что такое FileAuditor?"
+Ответ: "FileAuditor — это модуль для аудита файлов и контроля доступа"
+
+Вопрос: "Как настроить доступ?"
+Ответ: "Настройка доступа к файлам через FileAuditor"
+
+Вопрос: "Какие функции у FileAuditor?"
+Ответ: "FileAuditor выполняет поиск, аудит и маркировку файлов"
+
+Правила:
+1. Ответ должен быть на русском языке
+2. Не используй слова "документация", "информация"
+3. Выдай ТОЛЬКО гипотетический ответ, без кавычек
+
+Вопрос пользователя:`
 
 	messages := []map[string]string{
 		{"role": "system", "content": systemPrompt},
@@ -85,8 +120,16 @@ func (r *QueryRewriter) GenerateHyDE(ctx context.Context, query string) (string,
 		return query, nil
 	}
 
-	hypoAnswer = strings.TrimSpace(hypoAnswer)
-	if len(hypoAnswer) < 20 {
+	
+	forbidden := []string{"нет информации", "не найдено", "не знаю", "no information"}
+	for _, phrase := range forbidden {
+		if strings.Contains(strings.ToLower(hypoAnswer), phrase) {
+			fmt.Printf("HyDE вернул плохой ответ, используем оригинал\n")
+			return query, nil
+		}
+	}
+
+	if len(hypoAnswer) < 10 {
 		return query, nil
 	}
 
