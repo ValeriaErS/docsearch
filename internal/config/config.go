@@ -31,6 +31,7 @@ type Config struct {
 		EnableHyDE      bool    `yaml:"enable_hyde"`
 		HybridSearch    bool    `yaml:"hybrid_search"`
 		EnableRerank    bool    `yaml:"enable_rerank"`
+		EnableMultiQuery bool    `yaml:"enable_multi_query"`
 	} `yaml:"retrieval"`
 
 	LLM struct {

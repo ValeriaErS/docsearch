@@ -19,6 +19,7 @@ retrieval:
     enable_hyde: false 
     hybrid_search: false  
     enable_rerank: true 
+    enable_multi_query: true
 
 llm:
     provider: "openrouter"
