@@ -92,17 +92,15 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		fmt.Printf("Полнотекстовый поиск не вернул результатов\n")
 	}
 }
-// После получения результатов поиска
+
 results, err = vectorClient.Search(ctx, vector.CollectionName, vec32, cfg.Retrieval.TopK*3, userID)
 if err != nil || len(results) == 0 {
     return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, []string{}, 0, map[string]float64{}
 }
 
-// ===== РЕРАНКИНГ =====
 if cfg.Retrieval.EnableRerank && len(results) > cfg.Retrieval.TopK {
-    fmt.Printf("🔄 Запускаю реранкинг: %d документов\n", len(results))
+    fmt.Printf("Запускаю реранкинг: %d документов\n", len(results))
 
-    // Подготавливаем тексты
     documents := []string{}
     for _, r := range results {
         payload, ok := r["payload"].(map[string]interface{})
@@ -128,18 +126,16 @@ if cfg.Retrieval.EnableRerank && len(results) > cfg.Retrieval.TopK {
             }
             if len(rerankedResults) > 0 {
                 results = rerankedResults
-                fmt.Printf("✅ Реренкинг завершен: осталось %d документов\n", len(results))
+                fmt.Printf("Реренкинг завершен: осталось %d документов\n", len(results))
             }
         } else {
-            // Если реранкинг не удался, берем первые TopK
-            if len(results) > cfg.Retrieval.TopK {
+            
+            if len(results) > cfg.Retrieval.TopK {  // если реранкинг не удался берем первые TopK
                 results = results[:cfg.Retrieval.TopK]
             }
         }
     }
 }
-// ===== КОНЕЦ РЕРАНКИНГА =====
-
 
 var fusedResults []map[string]interface{}  //объединение
 if len(textResults) > 0 && cfg.Retrieval.HybridSearch {
