@@ -10,6 +10,7 @@ import (
 	"time"
 	"docsearch/internal/query"
 	"docsearch/internal/retrieve"
+	"docsearch/internal/rerank"
 )
 
 func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
@@ -91,6 +92,53 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		fmt.Printf("Полнотекстовый поиск не вернул результатов\n")
 	}
 }
+// После получения результатов поиска
+results, err = vectorClient.Search(ctx, vector.CollectionName, vec32, cfg.Retrieval.TopK*3, userID)
+if err != nil || len(results) == 0 {
+    return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, []string{}, 0, map[string]float64{}
+}
+
+// ===== РЕРАНКИНГ =====
+if cfg.Retrieval.EnableRerank && len(results) > cfg.Retrieval.TopK {
+    fmt.Printf("🔄 Запускаю реранкинг: %d документов\n", len(results))
+
+    // Подготавливаем тексты
+    documents := []string{}
+    for _, r := range results {
+        payload, ok := r["payload"].(map[string]interface{})
+        if !ok {
+            continue
+        }
+        chunkText, ok := payload["chunk_text"].(string)
+        if ok && chunkText != "" {
+            documents = append(documents, chunkText)
+        }
+    }
+
+    if len(documents) > 0 {
+        reranker := rerank.NewReranker()
+        indices, _, err := reranker.Rerank(queryForSearch, documents, cfg.Retrieval.TopK)
+
+        if err == nil && len(indices) > 0 {
+            rerankedResults := []map[string]interface{}{}
+            for _, idx := range indices {
+                if idx < len(results) {
+                    rerankedResults = append(rerankedResults, results[idx])
+                }
+            }
+            if len(rerankedResults) > 0 {
+                results = rerankedResults
+                fmt.Printf("✅ Реренкинг завершен: осталось %d документов\n", len(results))
+            }
+        } else {
+            // Если реранкинг не удался, берем первые TopK
+            if len(results) > cfg.Retrieval.TopK {
+                results = results[:cfg.Retrieval.TopK]
+            }
+        }
+    }
+}
+// ===== КОНЕЦ РЕРАНКИНГА =====
 
 
 var fusedResults []map[string]interface{}  //объединение

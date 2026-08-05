@@ -25,11 +25,12 @@ type Config struct {
 	} `yaml:"embeddings"`
 
 	Retrieval struct {
-		TopK     int     `yaml:"top_k"`
-		MinScore float64 `yaml:"min_score"`
-		EnableRewriting  bool    `yaml:"enable_rewriting"`  
-        EnableHyDE       bool    `yaml:"enable_hyde"`
-		HybridSearch     bool    `yaml:"hybrid_search"` 
+		TopK            int     `yaml:"top_k"`
+		MinScore        float64 `yaml:"min_score"`
+		EnableRewriting bool    `yaml:"enable_rewriting"`
+		EnableHyDE      bool    `yaml:"enable_hyde"`
+		HybridSearch    bool    `yaml:"hybrid_search"`
+		EnableRerank    bool    `yaml:"enable_rerank"`
 	} `yaml:"retrieval"`
 
 	LLM struct {
