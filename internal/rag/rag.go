@@ -268,6 +268,18 @@ if len(textResults) > 0 && cfg.Retrieval.HybridSearch {
 	if len(texts) == 0 {
 		return []string{}, []string{}, []float64{}, "В документации нет информации по этому вопросу", []int{}, []string{}, 0, map[string]float64{}
 	}
+	
+	if cfg.Retrieval.EnableCompression && len(texts) > 0 {
+    fmt.Printf("Запускаю сжатие контекста...\n")
+    
+    compressedTexts, err := query.CompressChunks(ctx, texts, question, &cfg)
+    if err == nil && len(compressedTexts) > 0 {
+        texts = compressedTexts
+        fmt.Printf("Контекст сжат: %d чанков\n", len(texts))
+    } else {
+        fmt.Printf("Сжатие не удалось: %v, использую оригиналы\n", err)
+    }
+}
 
 	var answer string //llm
 	var llmDuration float64
