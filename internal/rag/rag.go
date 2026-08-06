@@ -17,6 +17,7 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 	startTotal := time.Now()
 
 	queryForSearch := question
+	var multiQueryResults []map[string]interface{}
     rewriter := query.NewQueryRewriter(&cfg)
 
 	fmt.Printf("Рерайтер создан, EnableRewriting=%v, EnableHyDE=%v\n", 
@@ -45,6 +46,49 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
     if queryForSearch != question {  //финальный запрос
         fmt.Printf("Поиск по запросу: '%s'\n", queryForSearch)
     }
+	// После Rewriting и HyDE, перед эмбеддингом
+
+
+if cfg.Retrieval.EnableMultiQuery {
+    fmt.Printf("Запускаю Multi-Query поиск...\n")
+    
+    variants, err := query.GenerateMultiQueries(ctx, queryForSearch, &cfg)  // генерирую варианты запросов
+    if err != nil {
+        fmt.Printf("Ошибка генерации вариантов: %v\n", err)
+        variants = []string{queryForSearch}
+    }
+    
+    var allResults []map[string]interface{}
+    for i, variant := range variants {
+        fmt.Printf("Вариант %d: '%s'\n", i+1, variant)
+        
+        vec, err := embed.GetEmbedding(ctx, variant, &cfg)   //  эмбеддинг для варианта
+        if err != nil {
+            continue
+        }
+        
+        vec32 := []float32{}
+        for _, v := range vec {
+            vec32 = append(vec32, float32(v))
+        }
+        
+        results, err := vectorClient.Search(ctx, vector.CollectionName, vec32, cfg.Retrieval.TopK*2, userID)
+        if err != nil || len(results) == 0 {
+            continue
+        }
+        
+        allResults = append(allResults, results...)
+    }
+    
+    if len(allResults) > 0 {    // объединение через RRF
+        fusedResults := retrieve.ReciprocalRankFusion(allResults)
+        if len(fusedResults) > cfg.Retrieval.TopK*3 {
+            fusedResults = fusedResults[:cfg.Retrieval.TopK*3]
+        }
+        multiQueryResults = fusedResults  
+        fmt.Printf("Multi-Query: объединено %d результатов\n", len(multiQueryResults))
+    }
+}
 
 	startEmbed := time.Now() //эмбеддинг
 	vec, err := embed.GetEmbedding(ctx, queryForSearch, &cfg)
@@ -70,11 +114,16 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 	}
 
 	startSearch := time.Now() //поиск
-	results, err := vectorClient.Search(ctx, vector.CollectionName, vec32, cfg.Retrieval.TopK, userID)
-	if err != nil || len(results) == 0 {
-		return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, []string{}, 0, map[string]float64{}
-	}
-	searchDuration := time.Since(startSearch).Seconds()
+results, err := vectorClient.Search(ctx, vector.CollectionName, vec32, cfg.Retrieval.TopK, userID)
+if err != nil || len(results) == 0 {
+    return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, []string{}, 0, map[string]float64{}
+}
+searchDuration := time.Since(startSearch).Seconds()
+
+if len(multiQueryResults) > 0 {
+    results = multiQueryResults
+    fmt.Printf("Использую Multi-Query результаты: %d документов\n", len(results))
+}
 	
 	textResults := []map[string]interface{}{}  //текстовый поиск
 	if cfg.Retrieval.HybridSearch {
