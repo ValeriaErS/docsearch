@@ -134,6 +134,10 @@
             border-radius: 50px;
             color: white;
             outline: none;
+            autocomplete: off;
+            -webkit-autofill: none;
+            -webkit-box-shadow: 0 0 0 1000px rgba(0,0,0,0.3) inset !important;
+            box-shadow: 0 0 0 1000px rgba(0,0,0,0.3) inset !important;
         }
 
         input::placeholder {
@@ -307,7 +311,7 @@
         </div>
 
         <div class="input-container">
-            <input type="text" id="question" placeholder="Напиши свой вопрос...">
+           <input type="text" id="question" placeholder="Напиши свой вопрос..." autocomplete="off">
             <button id="sendBtn">Отправить</button>
         </div>
 
@@ -315,108 +319,195 @@
     </div>
 
     <script>
-        const token = localStorage.getItem('token');
-        const user = localStorage.getItem('user');
-        const USER = user || 'Валерия';
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+    const USER = user || 'Валерия';
 
-        console.log('Пользователь:', USER);
+    console.log('Пользователь:', USER);
 
-        const chat = document.getElementById('chat');
-        const input = document.getElementById('question');
-        const btn = document.getElementById('sendBtn');
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('question');
+    const btn = document.getElementById('sendBtn');
 
-        function addMessage(text, isUser, sources, timings) {
-            const msg = document.createElement('div');
-            msg.className = `msg ${isUser ? 'user' : 'bot'}`;
+    let isProcessing = false;
+    let abortController = null;  
 
-            const textDiv = document.createElement('div');
-            textDiv.textContent = text;
-            msg.appendChild(textDiv);
+    function addMessage(text, isUser, sources, timings) {
+        const msg = document.createElement('div');
+        msg.className = `msg ${isUser ? 'user' : 'bot'}`;
 
-            if (sources && sources.length) {
-                const src = document.createElement('div');
-                src.className = 'sources';
-                const names = sources.map(s => s.doc_id).join(', ');
-                src.textContent = `Источники: ${names}`;
-                msg.appendChild(src);
-            }
+        const textDiv = document.createElement('div');
+        textDiv.textContent = text;
+        msg.appendChild(textDiv);
 
-            if (!isUser && timings && timings.total !== undefined) {
-                const timeDiv = document.createElement('div');
-                timeDiv.className = 'timing';
-                timeDiv.style.fontSize = '12px';
-                timeDiv.style.opacity = '0.5';
-                timeDiv.style.marginTop = '6px';
-                timeDiv.style.borderTop = '1px solid rgba(255,255,255,0.05)';
-                timeDiv.style.paddingTop = '6px';
-                timeDiv.style.whiteSpace = 'pre-line';
-                timeDiv.style.fontFamily = 'monospace';
-                timeDiv.style.fontSize = '11px';
-
-                const total = timings.total ? timings.total.toFixed(2) : '0.00';
-                const embed = timings.embed ? timings.embed.toFixed(2) : '0.00';
-                const search = timings.search ? timings.search.toFixed(2) : '0.00';
-                const llm = timings.llm ? timings.llm.toFixed(2) : '0.00';
-
-                let text = `Общее время: ${total} сек\n`;
-                text += `── Эмбеддинг: ${embed} сек\n`;
-                text += `── Поиск: ${search} сек\n`;
-                text += `── LLM: ${llm} сек`;
-
-                timeDiv.textContent = text;
-                msg.appendChild(timeDiv);
-            }
-
-            chat.appendChild(msg);
-            chat.scrollTop = chat.scrollHeight;
+        if (sources && sources.length) {
+            const src = document.createElement('div');
+            src.className = 'sources';
+            const names = sources.map(s => s.doc_id).join(', ');
+            src.textContent = `Источники: ${names}`;
+            msg.appendChild(src);
         }
 
-        async function sendQuestion() {
-            const q = input.value.trim();
-            if (!q) return;
+        if (!isUser && timings && timings.total !== undefined) {
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'timing';
+            timeDiv.style.fontSize = '12px';
+            timeDiv.style.opacity = '0.5';
+            timeDiv.style.marginTop = '6px';
+            timeDiv.style.borderTop = '1px solid rgba(255,255,255,0.05)';
+            timeDiv.style.paddingTop = '6px';
+            timeDiv.style.whiteSpace = 'pre-line';
+            timeDiv.style.fontFamily = 'monospace';
+            timeDiv.style.fontSize = '11px';
 
-            addMessage(q, true);
-            input.value = '';
+            const total = timings.total ? timings.total.toFixed(2) : '0.00';
+            const embed = timings.embed ? timings.embed.toFixed(2) : '0.00';
+            const search = timings.search ? timings.search.toFixed(2) : '0.00';
+            const llm = timings.llm ? timings.llm.toFixed(2) : '0.00';
 
-            const wait = document.createElement('div');
-            wait.className = 'msg bot';
-            wait.textContent = 'Ищу...';
-            wait.style.opacity = '0.6';
-            chat.appendChild(wait);
-            chat.scrollTop = chat.scrollHeight;
+            let text = `Общее время: ${total} сек\n`;
+            text += `── Эмбеддинг: ${embed} сек\n`;
+            text += `── Поиск: ${search} сек\n`;
+            text += `── LLM: ${llm} сек`;
 
-            try {
-                const res = await fetch('/ask', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + localStorage.getItem('token')
-                    },
-                    body: JSON.stringify({
-                        query: q,
-                    })
-                });
+            timeDiv.textContent = text;
+            msg.appendChild(timeDiv);
+        }
 
-                const data = await res.json();
-                console.log("Ответ от сервера:", data);
-                wait.remove();
-                
-                if (data.answer) {
-                    addMessage(data.answer, false, data.sources || [], data.timings);
-                } else {
-                    addMessage('В документации такой информации не найдено.', false);
-                }
-            } catch (e) {
+        chat.appendChild(msg);
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    function createStopButton() {
+        const stopBtn = document.createElement('button');
+        stopBtn.id = 'stopBtn';
+        stopBtn.textContent = 'Пауза';
+        stopBtn.style.background = 'rgba(255, 50, 50, 0.8)';
+        stopBtn.style.marginLeft = '10px';
+        stopBtn.onclick = function(e) {
+            e.preventDefault();
+            stopSearch();
+        };
+        return stopBtn;
+    }
+
+    function stopSearch() {
+        if (abortController) {
+            abortController.abort();  
+            abortController = null;
+        }
+        isProcessing = false;
+        
+        const stopBtn = document.getElementById('stopBtn');
+        if (stopBtn) stopBtn.remove();
+
+
+        btn.style.display = 'inline-block';
+        btn.disabled = false;
+        btn.textContent = 'Отправить';
+        input.disabled = false;
+        input.placeholder = 'Напиши свой вопрос...';
+        input.focus();
+
+        const waits = chat.querySelectorAll('.msg.bot');
+        for (const w of waits) {
+            if (w.textContent.includes('Ищу ответ')) {
+                w.remove();
+            }
+        }
+
+        addMessage('Поиск остановлен пользователем.', false);
+        console.log("Поиск остановлен");
+    }
+
+    function sendQuestion() {
+        if (isProcessing) {
+            console.log("Уже идет поиск...");
+            return;
+        }
+
+        const q = input.value.trim();
+        if (!q) return;
+
+        isProcessing = true;
+        input.disabled = true;
+        input.placeholder = 'Подождите...';
+
+        btn.style.display = 'none';
+
+        const stopBtn = createStopButton();
+        const container = document.querySelector('.input-container');
+        container.appendChild(stopBtn);
+
+        addMessage(q, true);
+        input.value = '';
+
+        const wait = document.createElement('div');
+        wait.className = 'msg bot';
+        wait.textContent = 'Ищу';
+        wait.style.opacity = '0.6';
+        chat.appendChild(wait);
+        chat.scrollTop = chat.scrollHeight;
+
+        abortController = new AbortController();
+
+        fetch('/ask', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('token')
+            },
+            body: JSON.stringify({ query: q }),
+            signal: abortController.signal  
+        })
+        .then(res => res.json())
+        .then(data => {
+            console.log("Ответ от сервера:", data);
+            wait.remove();
+            
+            if (data.answer) {
+                addMessage(data.answer, false, data.sources || [], data.timings);
+            } else {
+                addMessage('В документации такой информации не найдено.', false);
+            }
+        })
+        .catch(e => {
+           
+            if (e.name !== 'AbortError') {
                 wait.remove();
                 addMessage('Ошибка соединения с сервером.', false);
                 console.error("Ошибка:", e);
             }
-        }
+        })
+        .finally(() => {
+            if (abortController !== null) {
+                const stopBtn = document.getElementById('stopBtn');
+                if (stopBtn) stopBtn.remove();
 
-        btn.addEventListener('click', sendQuestion);
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') sendQuestion();
+                btn.style.display = 'inline-block';
+                btn.disabled = false;
+                btn.textContent = 'Отправить';
+                input.disabled = false;
+                input.placeholder = 'Напиши свой вопрос...';
+                input.focus();
+
+                isProcessing = false;
+                abortController = null;
+            }
         });
-    </script>
+    }
+
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        sendQuestion();
+    });
+
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            sendQuestion();
+        }
+    });
+</script>
 </body>
 </html>
