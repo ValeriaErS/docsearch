@@ -32,6 +32,7 @@ type Config struct {
 		HybridSearch    bool    `yaml:"hybrid_search"`
 		EnableRerank    bool    `yaml:"enable_rerank"`
 		EnableMultiQuery bool    `yaml:"enable_multi_query"`
+		EnableCompression bool    `yaml:"enable_compression"`
 	} `yaml:"retrieval"`
 
 	LLM struct {

@@ -20,6 +20,7 @@ retrieval:
     hybrid_search: false  
     enable_rerank: true 
     enable_multi_query: true
+    enable_compression: true
 
 llm:
     provider: "openrouter"
