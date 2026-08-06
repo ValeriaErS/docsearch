@@ -35,6 +35,12 @@ type Config struct {
 		EnableCompression bool    `yaml:"enable_compression"`
 	} `yaml:"retrieval"`
 
+	Cache struct {
+		EnableEmbeddingCache bool `yaml:"enable_embedding_cache"`
+		EnableSearchCache    bool `yaml:"enable_search_cache"`
+		TTLHours             int  `yaml:"ttl_hours"`
+	} `yaml:"cache"`
+
 	LLM struct {
 		Provider    string  `yaml:"provider"`
 		Model       string  `yaml:"model"`
