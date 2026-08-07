@@ -34,3 +34,7 @@ cache:
     enable_search_cache: true
     ttl_hours: 24
 
+validation:
+    enable_citation_validator: true   
+    remove_invalid_citations: true
+
