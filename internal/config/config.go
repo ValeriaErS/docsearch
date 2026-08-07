@@ -44,6 +44,8 @@ type Config struct {
 	Validation struct {
 		EnableCitationValidator bool `yaml:"enable_citation_validator"`
 		RemoveInvalidCitations  bool `yaml:"remove_invalid_citations"`
+		EnableHallucinationDetection bool `yaml:"enable_hallucination_detection"`
+		WarnOnHallucination      bool `yaml:"warn_on_hallucination"`
 	} `yaml:"validation"`
 
 	LLM struct {
