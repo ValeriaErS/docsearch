@@ -327,13 +327,17 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 	texts, docs, scores, answer, pages, chunkIDs, _, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history, vectorClientGlobal)
 	sources := []map[string]interface{}{}
 	for i := 0; i < len(texts); i++ {
-		sources = append(sources, map[string]interface{}{
-			"doc_id":   docs[i],
-			"score":    scores[i],
-			"page":     pages[i],
-			"chunk_id": chunkIDs[i],
-		})
-	}
+   
+    if i >= len(docs) || i >= len(scores) || i >= len(pages) || i >= len(chunkIDs) {
+        break
+    }
+    sources = append(sources, map[string]interface{}{
+        "doc_id":   docs[i],
+        "score":    scores[i],
+        "page":     pages[i],
+        "chunk_id": chunkIDs[i],
+    })
+}
 
 	chatMutex.Lock()
 	chatHistory[userID] = append(chatHistory[userID], map[string]string{
