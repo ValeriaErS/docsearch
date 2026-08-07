@@ -12,6 +12,7 @@ import (
 	"docsearch/internal/retrieve"
 	"docsearch/internal/rerank"
 	"docsearch/internal/cache"
+    "docsearch/internal/validate"
 )
 
 func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
@@ -325,6 +326,29 @@ if cfg.LLM.Provider == "mock" {
     }
     fmt.Printf("LLM ответила, длина: %d символов\n", len(answer))
     llmDuration = time.Since(startLLM).Seconds()
+    
+    if cfg.Validation.EnableCitationValidator && len(answer) > 0 {
+    fmt.Printf("Проверяю ссылки в ответе...\n")
+    
+    validatedAnswer, citations := validate.ValidateAnswer(answer, texts, docs)
+    
+    validCount := 0
+    for _, c := range citations {
+        if c.IsValid {
+            validCount++
+        }
+    }
+    
+    if len(citations) > 0 {
+        fmt.Printf(" Ссылок: %d, подтверждено: %d\n", len(citations), validCount)
+    }
+    
+    if validatedAnswer != answer {
+        answer = validatedAnswer
+        fmt.Printf("Ответ очищен от неподтвержденных ссылок\n")
+    }
+}
+
 }
 
 totalDuration := time.Since(startTotal).Seconds()
