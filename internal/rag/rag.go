@@ -351,6 +351,25 @@ if cfg.LLM.Provider == "mock" {
 
 }
 
+if cfg.Validation.EnableHallucinationDetection && len(answer) > 0 {
+    fmt.Printf("Проверяю ответ на галлюцинации...\n")
+    
+    report := validate.CheckHallucinations(answer, texts, docs)
+    
+    if report.HasHallucinations {
+        fmt.Printf("Найдено %d неподтвержденных утверждений\n", report.Unverified)
+        for _, claim := range report.UnverifiedList {
+            fmt.Printf("'%s'\n", claim[:min(100, len(claim))])
+        }
+       
+        if cfg.Validation.WarnOnHallucination {
+            answer = answer + "\n\n Внимание: часть информации не подтверждена документами."
+        }
+    } else {
+        fmt.Printf("Все утверждения подтверждены (%d проверено)\n", report.Verified)
+    }
+}
+
 totalDuration := time.Since(startTotal).Seconds()
 
 timings := map[string]float64{
@@ -362,3 +381,10 @@ timings := map[string]float64{
 
 return texts, docs, scores, answer, pages, chunkIDs, tokensUsed, timings
 }
+func min(a, b int) int {  //  возвращает меньшее из двух чисел
+    if a < b {
+        return a
+    }
+    return b
+}
+
