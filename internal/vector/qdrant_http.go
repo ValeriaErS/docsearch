@@ -47,9 +47,6 @@ func NewQdrantClient() (*QdrantClient, error) { // создаю нового к�
 
 func (q *QdrantClient) url(path string) string { //адрес
 	scheme := "http"
-	if q.Host != "localhost" {
-		scheme = "https"
-	}
 	return fmt.Sprintf("%s://%s:%d%s", scheme, q.Host, q.Port, path)
 }
 
