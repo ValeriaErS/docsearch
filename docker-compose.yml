@@ -1,0 +1,40 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6335:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__SERVICE__HTTP_PORT=6333
+    networks:
+      - docsearch
+    restart: unless-stopped
+
+  docsearch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - DATABASE_URL=${DATABASE_URL:-}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+    volumes:
+      - ./docs:/app/docs
+    depends_on:
+      - qdrant
+    networks:
+      - docsearch
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:
+
+networks:
+  docsearch:
+    driver: bridge
