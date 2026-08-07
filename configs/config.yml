@@ -37,4 +37,6 @@ cache:
 validation:
     enable_citation_validator: true   
     remove_invalid_citations: true
+    enable_hallucination_detection: true  
+    warn_on_hallucination: true 
 
