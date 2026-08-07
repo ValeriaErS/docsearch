@@ -41,6 +41,11 @@ type Config struct {
 		TTLHours             int  `yaml:"ttl_hours"`
 	} `yaml:"cache"`
 
+	Validation struct {
+		EnableCitationValidator bool `yaml:"enable_citation_validator"`
+		RemoveInvalidCitations  bool `yaml:"remove_invalid_citations"`
+	} `yaml:"validation"`
+
 	LLM struct {
 		Provider    string  `yaml:"provider"`
 		Model       string  `yaml:"model"`
