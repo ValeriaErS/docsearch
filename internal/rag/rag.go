@@ -14,10 +14,25 @@ import (
 	"docsearch/internal/cache"
     "docsearch/internal/validate"
     "docsearch/internal/monitor"
+   
 )
 
 func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
 	startTotal := time.Now()
+   validationService := query.NewValidationService(&cfg)
+	validation, err := validationService.Validate(ctx, question)
+
+	if err != nil {
+		return []string{}, []string{}, []float64{},
+			"Не удалось проверить запрос. Попробуйте сформулировать вопрос иначе.",
+			[]int{}, []string{}, 0, map[string]float64{}
+	}
+
+	if validation.Status == query.StatusInvalid {
+		return []string{}, []string{}, []float64{},
+			validation.Reason,
+			[]int{}, []string{}, 0, map[string]float64{}
+	}
 
     metrics:=&monitor.Metrics{}
     metrics.StartNew(question,userID)

@@ -12,6 +12,10 @@ import (
 type Metrics struct {  //  хранит метрики одного запроса
 	mu sync.Mutex
 
+	Validated        bool   `json:"validated"`
+	ValidationReason string `json:"validation_reason,omitempty"`
+	ValidationDurationMs int64 `json:"validation_duration_ms"`
+
 	StartTime        time.Time `json:"start_time"`  // dременные метки
 	EndTime          time.Time `json:"end_time"`
 	TotalDurationMs  int64     `json:"total_duration_ms"`
