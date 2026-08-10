@@ -86,3 +86,4 @@ testdata/eval.json
 # Metrics and monitoring files
 metrics.jsonl
 metrics/
+test.json
