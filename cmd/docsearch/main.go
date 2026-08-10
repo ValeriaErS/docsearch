@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"docsearch/internal/monitor"
+	
 )
 
 type Source struct { // структура для json
@@ -276,11 +278,23 @@ func serveCmd() {
 	addr := serveFlag.String("addr", ":8080", "Адрес для сервера")
 	configFile := serveFlag.String("config", "configs/config.yml", "Путь к конфигу")
 
+	metricsFlag := serveFlag.Bool("metrics", false, "Показать метрики и выйти")
+
 	serveFlag.Parse(os.Args[2:])
 
 	cfg, err := config.LoadConfig(*configFile)
 	if err != nil {
 		fmt.Println("Ошибка загрузки конфига:", err)
+		return
+	}
+	if *metricsFlag {
+		collector := monitor.GetCollector()
+		collector.ExportSummary()
+	
+	if err := collector.GenerateCharts("metrics"); err != nil {
+			fmt.Printf("Ошибка генерации графиков: %v\n", err)
+		}
+		fmt.Println("\n Открой metrics/dashboard.html для просмотра графиков")
 		return
 	}
 
@@ -424,4 +438,6 @@ func createVectorClient(cfg *config.Config) (vector.VectorStore, error) {
 	}
 	client.VectorSize = cfg.Embeddings.VectorSize
 	return client, nil
+
+	
 }
