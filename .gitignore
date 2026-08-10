@@ -82,3 +82,7 @@ testdata/eval.json
 
 # Embedding cache
 .cache/
+
+# Metrics and monitoring files
+metrics.jsonl
+metrics/
