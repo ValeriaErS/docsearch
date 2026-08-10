@@ -213,13 +213,13 @@ func (c *MetricCollector) PrintSummary() {  //  печатает сводку п
 	fmt.Printf("Среднее время LLM: %.2f сек\n", float64(totalLLM)/float64(count)/1000)
 	fmt.Printf("Среднее токенов: %d\n", totalTokens/count)
 }
-// ExportSummary печатает сводку по метрикам
+
 func (c *MetricCollector) ExportSummary() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if len(c.metrics) == 0 {
-		fmt.Println("📊 Нет метрик")
+		fmt.Println("Нет метрик")
 		return
 	}
 
@@ -240,19 +240,19 @@ func (c *MetricCollector) ExportSummary() {
 
 	count := len(c.metrics)
 	fmt.Println("\n" + strings.Repeat("=", 50))
-	fmt.Println("📊 СВОДКА МЕТРИК")
+	fmt.Println("СВОДКА МЕТРИК")
 	fmt.Println(strings.Repeat("=", 50))
-	fmt.Printf("   Всего запросов: %d\n", count)
-	fmt.Printf("   Успешных: %d (%.1f%%)\n", successCount, float64(successCount)/float64(count)*100)
-	fmt.Printf("   Среднее время: %.2f сек\n", float64(totalDuration)/float64(count)/1000)
-	fmt.Printf("   Среднее время эмбеддинга: %.2f сек\n", float64(totalEmbedding)/float64(count)/1000)
-	fmt.Printf("   Среднее время поиска: %.2f сек\n", float64(totalSearch)/float64(count)/1000)
-	fmt.Printf("   Среднее время LLM: %.2f сек\n", float64(totalLLM)/float64(count)/1000)
-	fmt.Printf("   Среднее токенов: %d\n", totalTokens/count)
+	fmt.Printf("Всего запросов: %d\n", count)
+	fmt.Printf("Успешных: %d (%.1f%%)\n", successCount, float64(successCount)/float64(count)*100)
+	fmt.Printf("Среднее время: %.2f сек\n", float64(totalDuration)/float64(count)/1000)
+	fmt.Printf("Среднее время эмбеддинга: %.2f сек\n", float64(totalEmbedding)/float64(count)/1000)
+	fmt.Printf("Среднее время поиска: %.2f сек\n", float64(totalSearch)/float64(count)/1000)
+	fmt.Printf("Среднее время LLM: %.2f сек\n", float64(totalLLM)/float64(count)/1000)
+	fmt.Printf("Среднее токенов: %d\n", totalTokens/count)
 	fmt.Println(strings.Repeat("=", 50))
 }
-// Load загружает метрики из файла
-func (c *MetricCollector) Load() {
+
+func (c *MetricCollector) Load() {  //  загружает метрики из файла
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -271,5 +271,5 @@ func (c *MetricCollector) Load() {
 			c.metrics = append(c.metrics, m)
 		}
 	}
-	fmt.Printf("📊 Загружено %d метрик из файла\n", len(c.metrics))
+	fmt.Printf("Загружено %d метрик из файла\n", len(c.metrics))
 }

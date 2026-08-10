@@ -12,9 +12,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/ledongthuc/pdf"
 	"os"
 	"path/filepath"
-	"strings" 
+	"strings"
+	"docsearch/internal/parser" 
 )
 
 type Indexer struct { //структура индексации
@@ -33,6 +35,76 @@ func NewIndexer(cfg *config.Config, vc vector.VectorStore, userID string) *Index
 	}
 }
 
+func (i *Indexer) loadDocument(path string) (corpus.Document, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	var doc corpus.Document
+
+	if ext == ".pdf" {
+		parsed, err := parser.ParsePDFDocling(path)   // использую умный парсер docling
+		if err != nil {
+			fmt.Printf("Docling не сработал: %v, пробую fallback\n", err)
+			return i.loadDocumentFallback(path)
+		}
+
+		doc = corpus.Document{
+			Name:        parsed.Name,
+			Text:        parsed.Text,
+			Pages:       make(map[int]string),
+			PageOffsets: []int{},
+		}
+		return doc, nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return doc, err
+	}
+
+	doc = corpus.Document{
+		Name:        filepath.Base(path),
+		Text:        string(data),
+		Pages:       make(map[int]string),
+		PageOffsets: []int{},
+	}
+	return doc, nil
+}
+func (i *Indexer) loadDocumentFallback(path string) (corpus.Document, error) {
+	file, reader, err := pdf.Open(path)
+	if err != nil {
+		return corpus.Document{}, fmt.Errorf("ошибка открытия PDF: %w", err)
+	}
+	defer file.Close()
+
+	var fullText strings.Builder
+	pages := make(map[int]string)
+	var pageOffsets []int
+	offset := 0
+
+	for i := 1; i <= reader.NumPage(); i++ {
+		page := reader.Page(i)
+		if page.V.IsNull() {
+			continue
+		}
+		content, err := page.GetPlainText(nil)
+		if err != nil {
+			continue
+		}
+		pageOffsets = append(pageOffsets, offset)
+		pages[i] = content
+		fullText.WriteString(content)
+		fullText.WriteString("\n")
+		offset += len(content) + 1
+	}
+
+	doc := corpus.Document{
+		Name:        filepath.Base(path),
+		Text:        fullText.String(),
+		Pages:       pages,
+		PageOffsets: pageOffsets,
+	}
+	return doc, nil
+}
+
 func (i *Indexer) Index(ctx context.Context) error {
 	err := i.VectorClient.CreateCollection(ctx, vector.CollectionName) // создаю коллекцию
 	if err != nil {
@@ -48,13 +120,47 @@ func (i *Indexer) Index(ctx context.Context) error {
 		return nil
 	}
 
-	docs, err := corpus.LoadDocuments(userDocsPath, i.Config.Corpus.Formats) // загружаю документы из папки
+	files, err := os.ReadDir(userDocsPath) // читаю файлы в папке пользователя
 	if err != nil {
 		return err
 	}
 
+	var docs []corpus.Document
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		filePath := filepath.Join(userDocsPath, file.Name())
+
+		ext := strings.ToLower(filepath.Ext(file.Name()))
+		supported := false
+		for _, f := range i.Config.Corpus.Formats {
+			if strings.HasPrefix(ext, ".") {
+				if ext == "."+f {
+					supported = true
+					break
+				}
+			} else {
+				if ext == f {
+					supported = true
+					break
+				}
+			}
+		}
+		if !supported {
+			continue
+		}
+
+		doc, err := i.loadDocument(filePath)
+		if err != nil {
+			fmt.Printf("Ошибка загрузки %s: %v\n", file.Name(), err)
+			continue
+		}
+		docs = append(docs, doc)
+	}
+
 	if len(docs) == 0 {
-		fmt.Printf("В папке %s нет документов\n", userDocsPath)
+		fmt.Printf("В папке %s нет поддерживаемых документов\n", userDocsPath)
 
 		entries, err := os.ReadDir(userDocsPath) // проверка что в папке есть файлы
 		if err != nil {
@@ -121,10 +227,10 @@ func (i *Indexer) Index(ctx context.Context) error {
 
 func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
 	if len(strings.TrimSpace(doc.Text)) == 0 {
-        fmt.Printf("Документ %s пуст, пропускаем\n", doc.Name)
-        return nil
-    }
-	
+		fmt.Printf("Документ %s пуст, пропускаем\n", doc.Name)
+		return nil
+	}
+
 	chunks := chunk.SplitIntelligent(doc.Text, doc.Name, i.Config.Chunking.MaxTokens, i.Config.Chunking.OverlapTokens) // режу на чанки
 
 	fmt.Printf("Документ: %s, страниц: %d\n", doc.Name, len(doc.Pages))
@@ -135,37 +241,35 @@ func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
 
 		fmt.Printf("Чанк %d: страница %d, позиция %d\n", idx+1, page, ch.StartPos)
 
-		
-		var cache *EmbeddingCache  // создаю кеш один раз для всего документа
+		var cache *EmbeddingCache // создаю кеш один раз для всего документа
 		if i.Config.Embeddings.Provider == "local" {
 			cache = NewEmbeddingCache()
 		}
-		
-		
-		vec, err := func() ([]float64, error) {  // внутри цикла по чанкам проверяю кеш
-		if cache != nil {
-			if cached, ok := cache.Get(ch.Text); ok {
-				fmt.Printf("Чанк %d: эмбеддинг взят из кеша\n", idx+1)
-				return cached, nil
-        }
-    }
-	
-	vec, err := embed.GetEmbedding(ctx, ch.Text, i.Config)  // считаю эмбеддинг
-    if err != nil {
-        return nil, err
-    }
 
-    if cache != nil {
-        cache.Save(ch.Text, vec)
-    }
+		vec, err := func() ([]float64, error) { // внутри цикла по чанкам проверяю кеш
+			if cache != nil {
+				if cached, ok := cache.Get(ch.Text); ok {
+					fmt.Printf("Чанк %d: эмбеддинг взят из кеша\n", idx+1)
+					return cached, nil
+				}
+			}
 
-    return vec, nil
-}()
+			vec, err := embed.GetEmbedding(ctx, ch.Text, i.Config) // считаю эмбеддинг
+			if err != nil {
+				return nil, err
+			}
 
-if err != nil {
-    fmt.Println("Ошибка эмбеддинга:", err)
-    return err
-}
+			if cache != nil {
+				cache.Save(ch.Text, vec)
+			}
+
+			return vec, nil
+		}()
+
+		if err != nil {
+			fmt.Println("Ошибка эмбеддинга:", err)
+			return err
+		}
 
 		vec32 := []float32{}
 		for _, v := range vec {
@@ -183,7 +287,7 @@ if err != nil {
 			"user_id":     i.UserID,
 			"page":        page,
 			"chunk_id":    id,
-			"text":        ch.Text, 
+			"text":        ch.Text,
 		}
 
 		err = i.VectorClient.Save(ctx, vector.CollectionName, id, vec32, data)
