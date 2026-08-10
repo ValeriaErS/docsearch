@@ -13,10 +13,15 @@ import (
 	"docsearch/internal/rerank"
 	"docsearch/internal/cache"
     "docsearch/internal/validate"
+    "docsearch/internal/monitor"
 )
 
 func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
 	startTotal := time.Now()
+
+    metrics:=&monitor.Metrics{}
+    metrics.StartNew(question,userID)
+    metrics.SetModel(cfg.LLM.Model)
 
 	queryForSearch := question
 	var multiQueryResults []map[string]interface{}
@@ -117,6 +122,8 @@ if fromCache {
         return []string{}, []string{}, []float64{}, "не могу понять ваш вопрос", []int{}, []string{}, 0, map[string]float64{}
     }
     embedDuration = time.Since(startEmbed).Seconds()
+    metrics.SetEmbeddingDuration(time.Since(startEmbed))
+
 
     vec32 := []float32{}
     for i := 0; i < len(vec); i++ {
@@ -141,6 +148,8 @@ if fromCache {
         return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, []string{}, 0, map[string]float64{}
     }
     searchDuration = time.Since(startSearch).Seconds()
+    metrics.SetChunksFound(len(results))
+    metrics.SetSearchDuration(time.Since(startSearch))
 
     if len(multiQueryResults) > 0 {
         results = multiQueryResults
@@ -202,6 +211,7 @@ if fromCache {
                 if len(rerankedResults) > 0 {
                     results = rerankedResults
                     fmt.Printf("Реренкинг завершен: осталось %d документов\n", len(results))
+                    metrics.SetChunksAfterRerank(len(results))
                 }
             } else {
                 if len(results) > cfg.Retrieval.TopK {
@@ -298,6 +308,7 @@ if cfg.Retrieval.EnableCompression && len(texts) > 0 {
     if err == nil && len(compressedTexts) > 0 {
         texts = compressedTexts
         fmt.Printf("Контекст сжат: %d чанков\n", len(texts))
+        metrics.SetChunksAfterCompression(len(texts))
     } else {
         fmt.Printf("Сжатие не удалось: %v, использую оригиналы\n", err)
     }
@@ -322,10 +333,12 @@ if cfg.LLM.Provider == "mock" {
     answer, tokensUsed, err = llm.GetAnswerWithHistory(ctx, question, texts, docs, pages, history, &cfg)
     if err != nil {
         fmt.Printf("Ошибка LLM: %v\n", err)
+        metrics.SetError(err.Error())
         return texts, docs, scores, "LLM не отвечает", pages, chunkIDs, 0, map[string]float64{}
     }
     fmt.Printf("LLM ответила, длина: %d символов\n", len(answer))
     llmDuration = time.Since(startLLM).Seconds()
+    metrics.SetLLMDuration(time.Since(startLLM))
     
     if cfg.Validation.EnableCitationValidator && len(answer) > 0 {
     fmt.Printf("Проверяю ссылки в ответе...\n")
@@ -371,6 +384,10 @@ if cfg.Validation.EnableHallucinationDetection && len(answer) > 0 {
 }
 
 totalDuration := time.Since(startTotal).Seconds()
+metrics.SetTokensUsed(tokensUsed)
+metrics.SetSources(docs)
+metrics.End(answer)
+monitor.GetCollector().Save(*metrics)
 
 timings := map[string]float64{
     "total":  totalDuration,
