@@ -213,8 +213,8 @@ if fromCache {
         }
 
         if len(documents) > 0 {
-            reranker := rerank.NewReranker()
-            indices, _, err := reranker.Rerank(queryForSearch, documents, cfg.Retrieval.TopK)
+            reranker := rerank.NewReranker(&cfg)
+            indices, _, err := reranker.Rerank(ctx, queryForSearch, documents, cfg.Retrieval.TopK)
 
             if err == nil && len(indices) > 0 {
                 rerankedResults := []map[string]interface{}{}
@@ -226,11 +226,7 @@ if fromCache {
                 if len(rerankedResults) > 0 {
                     results = rerankedResults
                     fmt.Printf("Реренкинг завершен: осталось %d документов\n", len(results))
-                    metrics.SetChunksAfterRerank(len(results))
-                }
-            } else {
-                if len(results) > cfg.Retrieval.TopK {
-                    results = results[:cfg.Retrieval.TopK]
+             
                 }
             }
         }
