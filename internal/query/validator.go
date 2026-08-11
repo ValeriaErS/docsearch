@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-const MaxQueryLength = 2000  //ограничение запроса
+const MaxQueryLength = 2000 //ограничение запроса
 
 type ValidationStatus string
 
@@ -44,7 +44,7 @@ func (v *QueryValidator) Validate(query string) *ValidationResult {
 		}
 	}
 
-	if isOnlySpecialChars(query) {
+	if isOnlySpecialChars(query) { 
 		return &ValidationResult{
 			Status: StatusInvalid,
 			Reason: "Запрос содержит только специальные символы. Пожалуйста, задайте вопрос.",
@@ -114,6 +114,7 @@ func isKeyboardMash(query string) bool {
 	keyboardSequences := []string{
 		"qwerty", "qwertyui", "asdfgh", "asdfghj", "zxcvbn",
 		"йцукен", "йцукенг", "фывапр", "фывапрол", "ячсмить",
+		"фывфыв", "дждждж", "рпавыпрва", "ываываыва",
 	}
 
 	for _, sequence := range keyboardSequences {

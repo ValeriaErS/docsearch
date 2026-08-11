@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"docsearch/internal/config"
+	"log"
 )
 
 type ValidationService struct {
@@ -18,7 +19,6 @@ func NewValidationService(cfg *config.Config) *ValidationService {
 }
 
 func (s *ValidationService) Validate(ctx context.Context, query string) (*ValidationResult, error) {
-	// 1. Локальная проверка (дешёвая)
 	localResult := s.validator.Validate(query)
 
 	if localResult.Status == StatusInvalid {
@@ -29,8 +29,10 @@ func (s *ValidationService) Validate(ctx context.Context, query string) (*Valida
 		return localResult, nil
 	}
 
-	valid, err := ClassifyQuery(ctx, query, s.cfg)  //проверка через ллм
+	valid, err := ClassifyQuery(ctx, query, s.cfg) //проверка через ллм
+
 	if err != nil {
+		log.Printf("LLM классификатор недоступен: %v, пропускаем запрос", err)
 		return &ValidationResult{
 			Status: StatusValid,
 			Reason: "LLM классификатор недоступен",
