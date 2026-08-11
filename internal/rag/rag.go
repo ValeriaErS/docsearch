@@ -14,6 +14,7 @@ import (
 	"docsearch/internal/cache"
     "docsearch/internal/validate"
     "docsearch/internal/monitor"
+    "docsearch/internal/verify"
    
 )
 
@@ -270,6 +271,32 @@ if len(filteredResults) == 0 {
 }
 results = filteredResults
 
+if cfg.Retrieval.EnableRelevanceCheck && len(results) > 0 {
+    fmt.Printf("Проверяю релевантность контекста...\n")
+    
+    checkTexts := []string{}  //  тексты для проверки
+    for _, r := range results {
+        payload, ok := r["payload"].(map[string]interface{})
+        if !ok {
+            continue
+        }
+        chunkText, ok := payload["chunk_text"].(string)
+        if ok && chunkText != "" {
+            checkTexts = append(checkTexts, chunkText)
+        }
+    }
+    
+    hasAnswer, confidence, err := retrieve.RelevanceCheck(ctx, question, checkTexts, &cfg)
+    if err == nil && !hasAnswer {
+        fmt.Printf("Контекст не содержит ответа (confidence: %.2f)\n", confidence)
+        return []string{}, []string{}, []float64{}, 
+            "В документации нет информации по этому вопросу.", 
+            []int{}, []string{}, 0, map[string]float64{}
+    }
+    fmt.Printf("Контекст релевантен (confidence: %.2f)\n", confidence)
+}
+
+
 texts := []string{}
 docs := []string{}
 scores := []float64{}
@@ -350,6 +377,25 @@ if cfg.LLM.Provider == "mock" {
     fmt.Printf("LLM ответила, длина: %d символов\n", len(answer))
     llmDuration = time.Since(startLLM).Seconds()
     metrics.SetLLMDuration(time.Since(startLLM))
+
+   
+if cfg.Verification.EnableAnswerVerification && len(answer) > 0 {
+    fmt.Printf("Проверяю качество ответа...\n")
+    
+    result, err := verify.VerifyAnswer(ctx, question, answer, texts, &cfg)
+    if err == nil && result != nil {
+        if !result.IsAccurate {
+            fmt.Printf("Ответ содержит ошибки: %s\n", result.Reason)
+            if result.FixedAnswer != "" {
+                answer = result.FixedAnswer
+                fmt.Printf("Ответ исправлен\n")
+            }
+        } else {
+            fmt.Printf("Ответ проверен (confidence: %.2f)\n", result.Confidence)
+        }
+    }
+}
+
     
     if cfg.Validation.EnableCitationValidator && len(answer) > 0 {
     fmt.Printf("Проверяю ссылки в ответе...\n")

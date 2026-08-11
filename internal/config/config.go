@@ -33,6 +33,7 @@ type Config struct {
 		EnableRerank    bool    `yaml:"enable_rerank"`
 		EnableMultiQuery bool    `yaml:"enable_multi_query"`
 		EnableCompression bool    `yaml:"enable_compression"`
+		EnableRelevanceCheck bool   `yaml:"enable_relevance_check"`
 	} `yaml:"retrieval"`
 
 	Cache struct {
@@ -47,6 +48,10 @@ type Config struct {
 		EnableHallucinationDetection bool `yaml:"enable_hallucination_detection"`
 		WarnOnHallucination      bool `yaml:"warn_on_hallucination"`
 	} `yaml:"validation"`
+
+	Verification struct {   
+        EnableAnswerVerification bool `yaml:"enable_answer_verification"`
+    } `yaml:"verification"`
 
 	LLM struct {
 		Provider    string  `yaml:"provider"`

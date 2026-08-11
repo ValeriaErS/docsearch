@@ -21,6 +21,7 @@ retrieval:
     enable_rerank: false 
     enable_multi_query: false
     enable_compression: true
+    enable_relevance_check: true
 
 llm:
     provider: "openrouter"
@@ -39,4 +40,7 @@ validation:
     remove_invalid_citations: true
     enable_hallucination_detection: true  
     warn_on_hallucination: true 
+
+verification:
+    enable_answer_verification: true
 

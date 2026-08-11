@@ -4,7 +4,6 @@ import(
 	"docsearch/internal/config"
 	"docsearch/internal/llm"
 	"encoding/json"
-	"fmt"
 	"strings"
 )
 type VerificationResult struct{   //  результат проверки ответа
