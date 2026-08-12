@@ -77,6 +77,7 @@ type PostProcessingLog struct {
 	ValidCitations  int  `json:"valid_citations"`
 	Hallucinations  int  `json:"hallucinations"`
 	Verified        bool `json:"verified"`
+	DurationMs     int64 `json:"duration_ms"`
 }
 
 type PipelineLogger struct {

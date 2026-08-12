@@ -59,10 +59,8 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 	http.HandleFunc("/test.html", showTest)
 	http.HandleFunc("/login.html", showLogin)
 	http.HandleFunc("/register.html", showRegister)
-
-	http.HandleFunc("/login", handleLogin) // обработчики
+                                                   // обработчики
 	http.HandleFunc("/register", handleRegister)
-	http.HandleFunc("/ask", handleAsk)
 	http.HandleFunc("/health", handleHealth)
 
 	srv := &http.Server{

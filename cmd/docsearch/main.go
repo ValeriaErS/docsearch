@@ -15,6 +15,7 @@ import (
 	"os"
 	"time"
 	"docsearch/internal/monitor"
+	"docsearch/internal/logger"
 	
 )
 
@@ -124,6 +125,7 @@ func printHelp() {
 	fmt.Println("compare --user имя  Сравнение ANN и точного поиска")
 	fmt.Println("demo  Демонстрационный режим")
 	fmt.Println("--version Версия программы")
+	fmt.Println("analyze Анализ логов пайплайна")
 }
 
 func main() {
@@ -150,6 +152,8 @@ func main() {
 		compareCmd()
 	case "demo":
 		demoCmd()
+	case "analyze":
+		analyzeCmd()
 	case "--version", "-v":
 		fmt.Println("DocSearch version 1.0.0")
 	default:
@@ -157,6 +161,22 @@ func main() {
 		printHelp()
 		os.Exit(1)
 	}
+}
+func analyzeCmd() {
+	analyzeFlag := flag.NewFlagSet("analyze", flag.ExitOnError)
+	logFile := analyzeFlag.String("file", "pipeline_logs.jsonl", "Путь к файлу логов")
+	topN := analyzeFlag.Int("top", 5, "Количество самых медленных запросов")
+
+	analyzeFlag.Parse(os.Args[2:])
+
+	analyzer, err := logger.NewLogAnalyzer(*logFile)
+	if err != nil {
+		fmt.Printf("Ошибка чтения логов: %v\n", err)
+		return
+	}
+
+	analyzer.Summary()
+	analyzer.PrintSlowest(*topN)
 }
 
 func askCmd() {

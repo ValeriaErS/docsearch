@@ -87,3 +87,4 @@ testdata/eval.json
 metrics.jsonl
 metrics/
 test.json
+pipeline_logs.jsonl
