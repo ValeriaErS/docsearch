@@ -51,6 +51,9 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 	}
 	defer database.Close()
 
+	http.HandleFunc("/ask", RequestIDMiddleware(handleAsk))
+	http.HandleFunc("/login", RequestIDMiddleware(handleLogin))
+
 	http.HandleFunc("/", showIndex) // страницы
 	http.HandleFunc("/chat.html", showChat)
 	http.HandleFunc("/test.html", showTest)
