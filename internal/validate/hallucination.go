@@ -62,6 +62,17 @@ func (d *HallucinationDetector) Detect(answer string) HallucinationReport {  // 
 }
 
 func (d *HallucinationDetector) verifyClaim(claim string) bool {  //  проверяет одно утверждение
+	forbidden := []string{ //защита от галлюцинации
+		"User Safety: safe",
+		"Response Safety: safe",
+		"Safety: safe",
+	}
+	for _, f := range forbidden {
+		if strings.Contains(claim, f) {
+			return false
+		}
+	}
+
 	if len(d.chunks) == 0 {
 		return false
 	}
