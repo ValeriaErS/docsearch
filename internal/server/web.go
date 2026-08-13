@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 	"net"
+	"docsearch/internal/agent"
 )
 func getClientIP(r *http.Request) string{
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -53,6 +54,7 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 
 	http.HandleFunc("/ask", RequestIDMiddleware(handleAsk))
 	http.HandleFunc("/login", RequestIDMiddleware(handleLogin))
+	http.HandleFunc("/agent/ask", RequestIDMiddleware(handleAgentAsk))
 
 	http.HandleFunc("/", showIndex) // страницы
 	http.HandleFunc("/chat.html", showChat)
@@ -296,7 +298,7 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 		})
 		return
 	}
-
+	
 	if req.Query == "" {
 		http.Error(w, "Пустой вопрос", http.StatusBadRequest)
 		return
@@ -352,6 +354,45 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 		"answer":  answer,
 		"sources": sources,
 		"timings": timings,
+	})
+}
+func handleAgentAsk(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Нет токена", http.StatusUnauthorized)
+		return
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	username, err := auth.CheckToken(tokenString)
+	if err != nil {
+		http.Error(w, "Неверный токен", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Query string `json:"query"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Ошибка запроса", http.StatusBadRequest)
+		return
+	}
+
+	ag := agent.NewAgent(globalCfg, vectorClientGlobal)
+	answer, _, _, err := ag.Ask(r.Context(), req.Query, username, []map[string]string{})
+	if err != nil {
+		http.Error(w, "Ошибка агента: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"answer": answer,
 	})
 }
 func handleHealth(w http.ResponseWriter, r *http.Request) {
