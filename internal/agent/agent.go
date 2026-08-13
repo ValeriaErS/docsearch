@@ -13,6 +13,7 @@ type Agent struct {
 	cfg          *config.Config
 	vectorClient vector.VectorStore
 	planner      *Planner
+	memory       *Memory
 }
 
 type TaskResult struct { // результат выполнения шага
@@ -28,6 +29,7 @@ func NewAgent(cfg *config.Config, vc vector.VectorStore) *Agent { // созда�
 		cfg:          cfg,
 		vectorClient: vc,
 		planner:      NewPlanner(cfg),
+		memory:       NewMemory(10),
 	}
 }
 
@@ -51,6 +53,11 @@ func (a *Agent) Ask(ctx context.Context, question string, userID string, history
 				history,
 				a.vectorClient,
 			)
+
+			for _, result := range results {
+				a.memory.Add(result.Query, result.Answer, result.Sources, result.Step)
+			}
+
 			if isValidAnswer(answer) && !strings.Contains(answer, "нет информации") {
 				results = append(results, TaskResult{
 					Query:   subQuery,
@@ -234,4 +241,7 @@ func (a *Agent) synthesizeAnswer(originalQuery string, results []TaskResult) (st
 	answer.WriteString(strings.Join(allSources, ", "))
 
 	return answer.String(), allSources, allPages, nil
+}
+func (a *Agent) GetHistory() []MemoryItem {
+    return a.memory.GetHistory()
 }
