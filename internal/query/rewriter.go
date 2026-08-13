@@ -67,16 +67,33 @@ func (r *QueryRewriter) Rewrite(ctx context.Context, query string, history []map
 		return query, nil 
 	}
 
-	rewritten = strings.TrimSpace(strings.Trim(rewritten, "\"'"))
 
-	
-	forbidden := []string{"нет информации", "не найдено", "не знаю", "no information", "User Safety", "Response Safety"}
+	rewritten = strings.TrimSpace(rewritten)
+	rewritten = strings.Trim(rewritten, "\"'`")
+	hasRussian := false
+	for _, ch := range rewritten {
+    if ch >= 0x0400 && ch <= 0x04FF { // русские буквы
+        hasRussian = true
+        break
+    }
+}
+if !hasRussian && len(rewritten) > 0 {
+    fmt.Printf("Query Rewriting вернул не русский ответ, используем оригинал\n")
+    return query, nil
+}
+
+	forbidden := []string{"нет информации", "не найдено", "не знаю",
+    "User Safety", "Response Safety",
+    "I'm sorry", "I apologize", "I cannot",}
 	for _, phrase := range forbidden {
 		if strings.Contains(strings.ToLower(rewritten), strings.ToLower(phrase)) {
 			fmt.Printf("Рерайтер вернул плохой ответ: '%s', используем оригинал\n", rewritten)
 			return query, nil
 		}
 	}
+	if len(rewritten) > 50 { 
+    rewritten = rewritten[:50]
+}
 
 	if len(rewritten) < 3 {
 		return query, nil
@@ -90,18 +107,25 @@ func (r *QueryRewriter) GenerateHyDE(ctx context.Context, query string) (string,
 		return query, nil
 	}
 
-	systemPrompt := `Ты — помощник по переписыванию запросов для поиска.
-Перепиши вопрос пользователя в КОРОТКИЙ (2-5 слов) поисковый запрос на РУССКОМ языке.
-
-ВАЖНО: Ответь ТОЛЬКО переписанным запросом. БЕЗ кавычек. БЕЗ объяснений.
+	systemPrompt := `Ты — генератор поискового запроса.
+Придумай КОРОТКИЙ (1 предложение) гипотетический ответ на вопрос.
 
 Примеры:
-Вопрос: "Как это работает?" → "Принцип работы"
-Вопрос: "А как его настроить?" → "Настройка"
-Вопрос: "Что такое FileAuditor?" → "FileAuditor описание"
-Вопрос: "Сравни RAG и FileAuditor" → "Сравнение RAG FileAuditor"
+Вопрос: "Что такое FileAuditor?"
+Ответ: "FileAuditor — это модуль для аудита файлов и контроля доступа"
 
-Перепиши этот вопрос:`
+Вопрос: "Как настроить доступ?"
+Ответ: "Настройка доступа к файлам через FileAuditor"
+
+Вопрос: "Какие функции у FileAuditor?"
+Ответ: "FileAuditor выполняет поиск, аудит и маркировку файлов"
+
+Правила:
+1. Ответ должен быть на русском языке
+2. Не используй слова "документация", "информация"
+3. Выдай ТОЛЬКО гипотетический ответ, без кавычек
+
+Вопрос пользователя:`
 
 	messages := []map[string]string{
 		{"role": "system", "content": systemPrompt},
