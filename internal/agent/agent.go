@@ -10,123 +10,79 @@ import(
 type Agent struct{
 	cfg *config.Config
 	vectorClient vector.VectorStore
+	planner *Planner
 }
+type TaskResult struct {
+	Query   string   `json:"query"`
+	Answer  string   `json:"answer"`
+	Sources []string `json:"sources"`
+	Pages   []int    `json:"pages"`
+	Step    int      `json:"step"`
+}
+
 func NewAgent(cfg *config.Config,vc vector.VectorStore) *Agent{ //создает нового агента
 	return &Agent{
 		cfg: cfg,
 		vectorClient: vc,
+		planner: NewPlanner(cfg),
 	}
 }
-type TaskResult struct{ //результат выполнения задачи
-	Query    string   `json:"query"`
-	Answer   string   `json:"answer"`
-	Sources  []string `json:"sources"`
-	Pages    []int    `json:"pages"`
-	Step     int      `json:"step"`
-}
-func (a *Agent) Ask(ctx context.Context,question string,userID string,history []map[string]string)(string, []string,[]int,error){
-	if a.isComplexQuery(question){ //сложный ли вопросик
-		subQueries:=a.splitQuery(question) //разбивка на подвопросы
-		results:=[]TaskResult{} //выполняю каждый подвопрос
-		for i,subQuery:=range subQueries{
-			fmt.Printf("Шаг %d: %s\n", i+1, subQuery)
-			_, docs, _, answer, pages, _, _, _ := rag.Ask(
-				ctx,
-				*a.cfg,
-				subQuery,
-				userID,
-				history,
-				a.vectorClient,
-			)
-			if answer!=""{
-				results=append(results,TaskResult{
-					Query:subQuery,
-					Answer:answer,
-					Sources:docs,
-					Pages:pages,
-					Step:i+1,
-				})
-			}
-		}
-		return a.synthesizeAnswer(question, results)
-	}
-	_, docs, _, answer, pages, _, _, _ := rag.Ask( //если простой запрос то обычный rag
-		ctx,
-		*a.cfg,
-		question,
-		userID,
-		history,
-		a.vectorClient,	
-	)
-	return answer,docs,pages,nil
-}
-func(a *Agent) isComplexQuery(query string)bool{
-	complexKeywords:=[]string{
-		"сравни", "сравнение", "разница", "отличие",
-		"проанализируй", "анализ",
-		"объясни по шагам",
-		"и", "а также",
-	}
-	lower:=strings.ToLower(query)
-	for _,keyword:=range complexKeywords{
-		if strings.Contains(lower,keyword){
-			return true
-		}
-	}
-	if strings.Count(lower,"?")>1{
-		return true
-	}
-	return false
-}
-func (a *Agent) splitQuery(query string) []string{
-	lower:=strings.ToLower(query)
-	if strings.Contains(lower, "сравни") || strings.Contains(lower, "сравнение"){ //если есть сравни то разбивка на две части
 
-		parts:=strings.Split(query, "сравни")
-		if len(parts)>=2{
-			rest:=strings.TrimSpace(parts[1])
-			if strings.Contains(rest, "и"){
-				items:=strings.Split(rest,"и")
-				if len(items)>=2{
-					return []string{
-						strings.TrimSpace(items[0])+" — что это?",
-						strings.TrimSpace(items[1])+" — что это?",
-						"Сравни"+strings.TrimSpace(items[0])+" и " + strings.TrimSpace(items[1]),
+func (a *Agent) Ask(ctx context.Context, question string, userID string, history []map[string]string) (string, []string, []int, error) {
+	plan, err := a.planner.CreatePlan(ctx, question)  //создаю план
+	if err != nil {
+		_, docs, _, answer, pages, _, _, _ := rag.Ask(ctx, *a.cfg, question, userID, history, a.vectorClient)  //обычный rag
+		return answer, docs, pages, nil
+	}
 
-					}
-				}
-			}
+	if len(plan.Steps) == 1 {
+		_, docs, _, answer, pages, _, _, _ := rag.Ask(ctx, *a.cfg, plan.Steps[0].Query, userID, history, a.vectorClient)
+		return answer, docs, pages, nil
+	}
+
+	results := []TaskResult{}
+	for _, step := range plan.Steps {
+		fmt.Printf("Шаг %d: %s\n", step.Step, step.Description)
+
+		_, docs, _, answer, pages, _, _, _ := rag.Ask(
+			ctx,
+			*a.cfg,
+			step.Query,
+			userID,
+			history,
+			a.vectorClient,
+		)
+
+		if answer != "" && answer != "В документации нет информации по этому вопросу" {
+			results = append(results, TaskResult{
+				Query:   step.Query,
+				Answer:  answer,
+				Sources: docs,
+				Pages:   pages,
+				Step:    step.Step,
+			})
 		}
 	}
-	if strings.Contains(lower,"и")&& !strings.Contains(lower,"сравни"){
-		parts:=strings.Split(query,"и")
-		if len(parts)>=2{
-			subQueries:=[]string{}
-			for _,part:=range parts{
-				subQueries=append(subQueries,strings.TrimSpace(part))
-			}
-			return subQueries
-		}
-	}
-	return []string{query}
+
+	return a.synthesizeAnswer(question, results)
 }
-func (a *Agent) synthesizeAnswer(originalQuery string, results []TaskResult) (string, []string, []int, error) {
-	if len(results)==0{
-		return "Не удалось найти информацию по вашему запросу.", []string{},[]int{},nil
+
+func (a *Agent) synthesizeAnswer(originalQuery string, results []TaskResult) (string, []string, []int, error) {  //объединение результатов
+	if len(results) == 0 {
+		return "Не удалось найти информацию по вашему запросу.", []string{}, []int{}, nil
 	}
+
 	var answer strings.Builder
-	allSources:=[]string{}
-	allPages:=[]int{}
-	answer.WriteString(fmt.Sprintf("По вашему запросу: %s\n\n", originalQuery))
-	for _,result:=range results{
-		answer.WriteString(fmt.Sprintf("Шаг %d: %s\n", result.Step, result.Query))
-		answer.WriteString(fmt.Sprintf("%s\n\n", result.Answer))
+	allSources := []string{}
+	allPages := []int{}
+
+	for _, result := range results {
+		answer.WriteString(fmt.Sprintf("Шаг %d: %s\n\n", result.Step, result.Query))
+		answer.WriteString(result.Answer)
+		answer.WriteString("\n\n")
 		allSources = append(allSources, result.Sources...)
 		allPages = append(allPages, result.Pages...)
 	}
-	answer.WriteString("\n---\n")
-	answer.WriteString("Источники: ")
-	answer.WriteString(strings.Join(allSources, ", "))
-	
+
 	return answer.String(), allSources, allPages, nil
 }
