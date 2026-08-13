@@ -16,6 +16,7 @@ import (
 	"time"
 	"docsearch/internal/monitor"
 	"docsearch/internal/logger"
+	"docsearch/internal/agent"
 	
 )
 
@@ -185,6 +186,7 @@ func askCmd() {
 	userID := askFlag.String("user", "", "Имя пользователя")
 	configFile := askFlag.String("config", "configs/config.yml", "Путь к конфигу")
 	outFile := askFlag.String("out", "", "Файл для сохранения результата")
+	useAgent := askFlag.Bool("agent", false, "Использовать агента для сложных запросов")
 
 	askFlag.Parse(os.Args[2:])
 
@@ -290,6 +292,16 @@ func askCmd() {
 		}
 	} else {
 		fmt.Println(string(jsonData))
+	}
+	if *useAgent {
+		agent := agent.NewAgent(cfg, vectorClient)
+		answer, _, _, err := agent.Ask(context.Background(), *query, safeUser, []map[string]string{})
+		if err != nil {
+			fmt.Println("Ошибка агента:", err)
+			return
+		}
+		fmt.Println(answer)
+		return
 	}
 }
 

@@ -27,19 +27,19 @@ type TaskResult struct{ //результат выполнения задачи
 func (a *Agent) Ask(ctx context.Context,question string,userID string,history []map[string]string)(string, []string,[]int,error){
 	if a.isComplexQuery(question){ //сложный ли вопросик
 		subQueries:=a.splitQuery(question) //разбивка на подвопросы
-		result:=[]TaskResult{} //выполняю каждый подвопрос
+		results:=[]TaskResult{} //выполняю каждый подвопрос
 		for i,subQuery:=range subQueries{
 			fmt.Printf("Шаг %d: %s\n", i+1, subQuery)
-			texts,docs,scores,answer,pages,_,_,_:=rag.Ask(
+			_, docs, _, answer, pages, _, _, _ := rag.Ask(
 				ctx,
-				*a,cfg,
+				*a.cfg,
 				subQuery,
 				userID,
 				history,
 				a.vectorClient,
 			)
 			if answer!=""{
-				result=append(results,TaskResult{
+				results=append(results,TaskResult{
 					Query:subQuery,
 					Answer:answer,
 					Sources:docs,
@@ -50,13 +50,13 @@ func (a *Agent) Ask(ctx context.Context,question string,userID string,history []
 		}
 		return a.synthesizeAnswer(question, results)
 	}
-	texts,docs,scores,answer,pages,_,_,_:=rag.Ask( //если простой запрос то обычный rag
-		        ctx,
-				*a,cfg,
-				subQuery,
-				userID,
-				history,
-				a.vectorClient,	
+	_, docs, _, answer, pages, _, _, _ := rag.Ask( //если простой запрос то обычный rag
+		ctx,
+		*a.cfg,
+		question,
+		userID,
+		history,
+		a.vectorClient,	
 	)
 	return answer,docs,pages,nil
 }
@@ -85,7 +85,7 @@ func (a *Agent) splitQuery(query string) []string{
 		parts:=strings.Split(query, "сравни")
 		if len(parts)>=2{
 			rest:=strings.TrimSpace(parts[1])
-			if strings.Contains(resr, "и"){
+			if strings.Contains(rest, "и"){
 				items:=strings.Split(rest,"и")
 				if len(items)>=2{
 					return []string{
@@ -118,7 +118,7 @@ func (a *Agent) synthesizeAnswer(originalQuery string, results []TaskResult) (st
 	allSources:=[]string{}
 	allPages:=[]int{}
 	answer.WriteString(fmt.Sprintf("По вашему запросу: %s\n\n", originalQuery))
-	for _,result:=range result{
+	for _,result:=range results{
 		answer.WriteString(fmt.Sprintf("Шаг %d: %s\n", result.Step, result.Query))
 		answer.WriteString(fmt.Sprintf("%s\n\n", result.Answer))
 		allSources = append(allSources, result.Sources...)
