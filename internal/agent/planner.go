@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Plan struct {
@@ -32,31 +33,38 @@ func (p *Planner) CreatePlan(ctx context.Context, query string) (*Plan, error) {
 		return p.createSimplePlan(query), nil
 	}
 
-	systemPrompt := `Ты — планировщик запросов для системы поиска документов.
-Твоя задача — разбить сложный запрос пользователя на простые шаги.
+	systemPrompt := `Ты — планировщик запросов для поиска документов.
+Разбей сложный запрос на простые шаги.
 
 Правила:
-1. Если запрос простой — создай 1 шаг с тем же запросом.
-2. Если запрос содержит сравнение — разбей на 3 шага:
-   - Шаг 1: найти информацию об объекте А
-   - Шаг 2: найти информацию об объекте Б
-   - Шаг 3: сравнить А и Б
-3. Если запрос содержит несколько вопросов — каждый вопрос отдельный шаг.
-4. Каждый шаг должен быть самостоятельным поисковым запросом.
-5. Ответь ТОЛЬКО JSON в формате:
-{"steps": [{"step": 1, "description": "описание", "query": "поисковый запрос"}]}`
+1. Если запрос простой — 1 шаг.
+2. Если запрос содержит "сравни", "сравнение", "разница" — 3 шага:
+   - Шаг 1: описание первого объекта
+   - Шаг 2: описание второго объекта
+   - Шаг 3: сравнение
+3. Если запрос содержит "и" — каждый объект отдельный шаг.
+4. Каждый шаг — самостоятельный поисковый запрос.
+
+Ответь ТОЛЬКО JSON:
+{"steps": [{"step": 1, "description": "описание", "query": "запрос"}]}
+
+Запрос: ` + query
 
 	messages := []map[string]string{
 		{"role": "system", "content": systemPrompt},
-		{"role": "user", "content": fmt.Sprintf("Запрос: %s", query)},
+		{"role": "user", "content": query},
 	}
 
 	tempCfg := *p.cfg
 	tempCfg.LLM.Temperature = 0.0
 	tempCfg.LLM.MaxTokens = 300
 
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
 	response, _, err := llm.GetAnswerWithHistory(ctx, query, []string{}, []string{}, []int{}, messages, &tempCfg)
 	if err != nil {
+		fmt.Printf("Ошибка планировщика: %v, использую локальное разбиение\n", err)
 		return p.createSimplePlan(query), nil
 	}
 
