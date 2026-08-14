@@ -20,6 +20,7 @@ import (
 	"net"
 	"docsearch/internal/agent"
 )
+var startTime = time.Now()
 var rateLimiter = NewRateLimiter(30, 1*time.Minute)
 
 func getClientIP(r *http.Request) string{
@@ -85,6 +86,8 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 	http.HandleFunc("/register.html", showRegister)                                                
 	http.HandleFunc("/register", handleRegister)
 	http.HandleFunc("/health", handleHealth)
+	http.HandleFunc("/live", handleLiveness) 
+	http.HandleFunc("/ready", handleReadiness)
 
 	srv := &http.Server{
 		Addr:         "0.0.0.0" + port,
@@ -445,4 +448,43 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status": "ok",
 		"qdrant": "connected",
 	})
+}
+func handleLiveness(w http.ResponseWriter, r *http.Request) {  //проверка жив ли сервер
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "status":        "alive",
+        "uptime_seconds": int64(time.Since(startTime).Seconds()),
+    })
+}
+
+func handleReadiness(w http.ResponseWriter, r *http.Request) {  //проверка готов ли сервер принимать запросы
+    w.Header().Set("Content-Type", "application/json")
+    
+    if vectorClientGlobal == nil {
+        w.WriteHeader(http.StatusServiceUnavailable)
+        json.NewEncoder(w).Encode(map[string]string{
+            "status": "not_ready",
+            "reason": "vector client not initialized",
+        })
+        return
+    }
+    
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    defer cancel()
+    
+    vec := make([]float32, 768)    // делаю легкий поиск с limit 1 чтобы проверить соединение
+    _, err := vectorClientGlobal.Search(ctx, vector.CollectionName, vec, 1, "health_check")
+    
+    if err != nil {
+        w.WriteHeader(http.StatusServiceUnavailable)
+        json.NewEncoder(w).Encode(map[string]string{
+            "status": "not_ready",
+            "reason": "qdrant not responding: " + err.Error(),
+        })
+        return
+    }
+    
+    json.NewEncoder(w).Encode(map[string]string{
+        "status": "ready",
+    })
 }
