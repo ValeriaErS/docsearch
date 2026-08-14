@@ -16,6 +16,10 @@ func ClassifyComplexity(query string) Complexity {   //  определяет с
 	words := strings.Fields(lower)
 	n := len(words)
 
+	if n == 0 {
+		return ComplexityMedium
+	}
+
 	complexMarkers := []string{
 		"сравни", "сравнение", "разница", "отличие", "отличия",
 		"в отличие", "по сравнению", "плюсы и минусы",
