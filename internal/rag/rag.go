@@ -54,10 +54,31 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		logger.GetPipelineLogger().Save(pipelineLog)
 		return []string{}, []string{}, []float64{}, validation.Reason, []int{}, []string{}, 0, map[string]float64{}
 	}
-	
+
+	complexity := query.ClassifyComplexity(question) // определяю сложность запроса и выбираю стратегию
+	strategy := query.GetRetrievalStrategy(complexity)
+
+	fmt.Printf("[%s] complexity=%s strategy=%q TopK=%d rw=%v hyb=%v rr=%v mq=%v\n",
+		requestID, complexity, strategy.Description,
+		strategy.TopK, strategy.UseRewriting, strategy.UseHybrid,
+		strategy.UseRerank, strategy.UseMultiQuery)
+
+	effectiveCfg := cfg
+	effectiveCfg.Retrieval.TopK = strategy.TopK
+	effectiveCfg.Retrieval.EnableRewriting = strategy.UseRewriting
+	effectiveCfg.Retrieval.HybridSearch = strategy.UseHybrid
+	effectiveCfg.Retrieval.EnableRerank = strategy.UseRerank
+	effectiveCfg.Retrieval.EnableMultiQuery = strategy.UseMultiQuery
+	effectiveCfg.Retrieval.EnableHyDE = strategy.UseRewriting && cfg.Retrieval.EnableHyDE
+
+	cfg = effectiveCfg
+
 	metrics := &monitor.Metrics{}  //метрики
 	metrics.StartNew(question, userID)
 	metrics.SetModel(cfg.LLM.Model)
+	metrics.SetQueryComplexity(string(complexity))
+	metrics.SetRetrievalStrategy(strategy.Description)
+	metrics.SetRetrievalRounds(1)
 
 	queryForSearch := question
 	var multiQueryResults []map[string]interface{}
@@ -499,6 +520,7 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 	metrics.SetTokensUsed(tokensUsed)
 	metrics.SetSources(docs)
 	metrics.End(answer)
+
 	monitor.GetCollector().Save(*metrics)
 	
 	pipelineLog.FinalAnswer = answer

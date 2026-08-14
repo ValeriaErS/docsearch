@@ -16,7 +16,7 @@ type Metrics struct {  //  хранит метрики одного запрос
 	ValidationReason string `json:"validation_reason,omitempty"`
 	ValidationDurationMs int64 `json:"validation_duration_ms"`
 
-	StartTime        time.Time `json:"start_time"`  // dременные метки
+	StartTime        time.Time `json:"start_time"`  // временные метки
 	EndTime          time.Time `json:"end_time"`
 	TotalDurationMs  int64     `json:"total_duration_ms"`
 
@@ -41,6 +41,10 @@ type Metrics struct {  //  хранит метрики одного запрос
 	Error   string `json:"error,omitempty"`
 
 	UserID string `json:"user_id"`
+
+	QueryComplexity   string `json:"query_complexity"`
+    RetrievalStrategy string `json:"retrieval_strategy"`
+    RetrievalRounds   int    `json:"retrieval_rounds"`
 }
 
 type MetricCollector struct {  //  собирает метрики
@@ -154,6 +158,23 @@ func (m *Metrics) SetRewrittenQuery(query string) {
 	defer m.mu.Unlock()
 	m.RewrittenQuery = query
 }
+func (m *Metrics) SetQueryComplexity(complexity string) {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    m.QueryComplexity = complexity
+}
+
+func (m *Metrics) SetRetrievalStrategy(strategy string) {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    m.RetrievalStrategy = strategy
+}
+
+func (m *Metrics) SetRetrievalRounds(rounds int) {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    m.RetrievalRounds = rounds
+}
 
 func (c *MetricCollector) Save(m Metrics) {
 	c.mu.Lock()
@@ -244,7 +265,7 @@ func (c *MetricCollector) ExportSummary() {
 
 	count := len(c.metrics)
 	fmt.Println("\n" + strings.Repeat("=", 50))
-	fmt.Println("СВОДКА МЕТРИК")
+	fmt.Println("Сводка метрик")
 	fmt.Println(strings.Repeat("=", 50))
 	fmt.Printf("Всего запросов: %d\n", count)
 	fmt.Printf("Успешных: %d (%.1f%%)\n", successCount, float64(successCount)/float64(count)*100)
