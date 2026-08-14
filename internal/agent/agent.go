@@ -99,6 +99,10 @@ func (a *Agent) executePlan(ctx context.Context, question string, userID string,
 			})
 		}
 	}
+	for _, result := range results {
+		a.memory.Add(result.Query, result.Answer, result.Sources, result.Step)
+	}
+	
 	if len(results) == 0 {
 		return a.fallbackRAG(ctx, question, userID, history)
 	}
