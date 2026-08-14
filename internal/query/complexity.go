@@ -36,16 +36,6 @@ func ClassifyComplexity(query string) Complexity {   //  определяет с
 		return ComplexityComplex
 	}
 
-	if n <= 5 && (strings.HasPrefix(lower, "что такое") ||
-		strings.HasPrefix(lower, "кто ") ||
-		strings.HasPrefix(lower, "что есть")) {
-		return ComplexitySimple
-	}
-
-	if n <= 4 {
-		return ComplexitySimple
-	}
-
 	mediumMarkers := []string{
 		"как ", "почему", "зачем", "объясни", "расскажи",
 		"настрой", "установ", "инструкц", "пошагов",
@@ -56,6 +46,16 @@ func ClassifyComplexity(query string) Complexity {   //  определяет с
 			return ComplexityMedium
 		}
 	}
+	if n <= 5 && (strings.HasPrefix(lower, "что такое") ||
+		strings.HasPrefix(lower, "кто ") ||
+		strings.HasPrefix(lower, "что есть")) {
+		return ComplexitySimple
+	}
+
+	if n <= 4 {
+		return ComplexitySimple
+	}
+
 
 	return ComplexityMedium
 }
