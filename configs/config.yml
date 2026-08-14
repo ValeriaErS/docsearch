@@ -44,3 +44,7 @@ validation:
 verification:
     enable_answer_verification: true
 
+rate_limit:
+    enabled: true
+    requests_per_minute: 30
+

@@ -24,6 +24,11 @@ type Config struct {
 		VectorSize int    `yaml:"vector_size"`
 	} `yaml:"embeddings"`
 
+	 RateLimit struct {
+        Enabled           bool `yaml:"enabled"`
+        RequestsPerMinute int  `yaml:"requests_per_minute"`
+    } `yaml:"rate_limit"`
+
 	Retrieval struct {
 		TopK            int     `yaml:"top_k"`
 		MinScore        float64 `yaml:"min_score"`

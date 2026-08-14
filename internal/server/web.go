@@ -20,6 +20,8 @@ import (
 	"net"
 	"docsearch/internal/agent"
 )
+var rateLimiter = NewRateLimiter(30, 1*time.Minute)
+
 func getClientIP(r *http.Request) string{
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
     if err != nil {
@@ -52,16 +54,35 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 	}
 	defer database.Close()
 
-	http.HandleFunc("/ask", RequestIDMiddleware(handleAsk))
-	http.HandleFunc("/login", RequestIDMiddleware(handleLogin))
-	http.HandleFunc("/agent/ask", RequestIDMiddleware(handleAgentAsk))
+    rateLimitMiddleware := func(next http.HandlerFunc) http.HandlerFunc {
+        return func(w http.ResponseWriter, r *http.Request) {
+            key := getClientIP(r)
+            if user := r.Header.Get("Authorization"); user != "" {
+                key += ":" + user
+            }
+
+            if !rateLimiter.Allow(key) {
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusTooManyRequests)
+                json.NewEncoder(w).Encode(map[string]interface{}{
+                    "error": "Слишком много запросов. Попробуйте через минуту.",
+                })
+                return
+            }
+
+            next(w, r)
+        }
+    }
+
+	http.HandleFunc("/ask", rateLimitMiddleware(RequestIDMiddleware(handleAsk)))
+    http.HandleFunc("/agent/ask", rateLimitMiddleware(RequestIDMiddleware(handleAgentAsk)))
+    http.HandleFunc("/login", rateLimitMiddleware(RequestIDMiddleware(handleLogin)))
 
 	http.HandleFunc("/", showIndex) // страницы
 	http.HandleFunc("/chat.html", showChat)
 	http.HandleFunc("/test.html", showTest)
 	http.HandleFunc("/login.html", showLogin)
-	http.HandleFunc("/register.html", showRegister)
-                                                   // обработчики
+	http.HandleFunc("/register.html", showRegister)                                                
 	http.HandleFunc("/register", handleRegister)
 	http.HandleFunc("/health", handleHealth)
 
