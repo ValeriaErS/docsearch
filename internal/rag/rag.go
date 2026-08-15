@@ -238,7 +238,9 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 				len(results), len(textResults), len(fusedResults))
 			results = fusedResults
 		} else {
-			results = results[:cfg.Retrieval.TopK]
+			if len(results) > cfg.Retrieval.TopK {
+    results = results[:cfg.Retrieval.TopK]
+}
 		}
 
 		pipelineLog.Retrieval = &logger.RetrievalLog{  //логинг поиск
