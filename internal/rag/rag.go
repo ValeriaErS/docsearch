@@ -17,9 +17,13 @@ import (
 	"docsearch/internal/verify"
 	"docsearch/internal/logger"
 	"docsearch/internal/request"
+	prommetrics "docsearch/internal/metrics"
 )
 
 func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
+	prommetrics.ActiveRequests.Inc()
+    defer prommetrics.ActiveRequests.Dec()
+
 	startTotal := time.Now()
 
 	requestID := request.GetRequestID(ctx) //логинг 
@@ -73,12 +77,12 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 
 	cfg = effectiveCfg
 
-	metrics := &monitor.Metrics{}  //метрики
-	metrics.StartNew(question, userID)
-	metrics.SetModel(cfg.LLM.Model)
-	metrics.SetQueryComplexity(string(complexity))
-	metrics.SetRetrievalStrategy(strategy.Description)
-	metrics.SetRetrievalRounds(1)
+	monitorMetrics := &monitor.Metrics{}  //метрики
+	monitorMetrics.StartNew(question, userID)
+	monitorMetrics.SetModel(cfg.LLM.Model)
+	monitorMetrics.SetQueryComplexity(string(complexity))
+	monitorMetrics.SetRetrievalStrategy(strategy.Description)
+	monitorMetrics.SetRetrievalRounds(1)
 
 	queryForSearch := question
 	var multiQueryResults []map[string]interface{}
@@ -179,7 +183,7 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 			return []string{}, []string{}, []float64{}, "не могу понять ваш вопрос", []int{}, []string{}, 0, map[string]float64{}
 		}
 		embedDuration = time.Since(startEmbed).Seconds()
-		metrics.SetEmbeddingDuration(time.Since(startEmbed))
+		monitorMetrics.SetEmbeddingDuration(time.Since(startEmbed))
 
 		vec32 := []float32{}
 		for i := 0; i < len(vec); i++ {
@@ -203,8 +207,8 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 			return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, []string{}, 0, map[string]float64{}
 		}
 		searchDuration = time.Since(startSearch).Seconds()
-		metrics.SetChunksFound(len(results))
-		metrics.SetSearchDuration(time.Since(startSearch))
+		monitorMetrics.SetChunksFound(len(results))
+		monitorMetrics.SetSearchDuration(time.Since(startSearch))
 
 		if len(multiQueryResults) > 0 {
 			results = multiQueryResults
@@ -401,7 +405,7 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		if err == nil && len(compressedTexts) > 0 {
 			texts = compressedTexts
 			fmt.Printf("Контекст сжат: %d чанков\n", len(texts))
-			metrics.SetChunksAfterCompression(len(texts))
+			monitorMetrics.SetChunksAfterCompression(len(texts))
 		} else {
 			fmt.Printf("Сжатие не удалось: %v, использую оригиналы\n", err)
 		}
@@ -426,12 +430,12 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		answer, tokensUsed, err = llm.GetAnswerWithHistory(ctx, question, texts, docs, pages, history, &cfg)
 		if err != nil {
 			fmt.Printf("Ошибка LLM: %v\n", err)
-			metrics.SetError(err.Error())
+			monitorMetrics.SetError(err.Error())
 			return texts, docs, scores, "LLM не отвечает", pages, chunkIDs, 0, map[string]float64{}
 		}
 		fmt.Printf("LLM ответила, длина: %d символов\n", len(answer))
 		llmDuration = time.Since(startLLM).Seconds()
-		metrics.SetLLMDuration(time.Since(startLLM))
+		monitorMetrics.SetLLMDuration(time.Since(startLLM))
 
 		pipelineLog.LLM = &logger.LLMLog{ //логинг ллм
 			Provider:   cfg.LLM.Provider,
@@ -517,11 +521,11 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 	}
 	
 	totalDuration := time.Since(startTotal).Seconds()
-	metrics.SetTokensUsed(tokensUsed)
-	metrics.SetSources(docs)
-	metrics.End(answer)
+	monitorMetrics.SetTokensUsed(tokensUsed)
+	monitorMetrics.SetSources(docs)
+	monitorMetrics.End(answer)
 
-	monitor.GetCollector().Save(*metrics)
+	monitor.GetCollector().Save(*monitorMetrics)
 	
 	pipelineLog.FinalAnswer = answer
 	pipelineLog.Sources = docs
@@ -536,6 +540,15 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		"search": searchDuration,
 		"llm":    llmDuration,
 	}
+	prommetrics.RequestDuration.WithLabelValues("ask").Observe(time.Since(startTotal).Seconds())
+prommetrics.RetrievedChunks.Observe(float64(len(texts)))
+prommetrics.TokensUsed.Observe(float64(tokensUsed))
+
+if len(texts) > 0 {
+    prommetrics.RequestsTotal.WithLabelValues("ask", "success").Inc()
+} else {
+    prommetrics.RequestsTotal.WithLabelValues("ask", "empty").Inc()
+}
 
 	return texts, docs, scores, answer, pages, chunkIDs, tokensUsed, timings
 }

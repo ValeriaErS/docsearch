@@ -19,6 +19,7 @@ import (
 	"time"
 	"net"
 	"docsearch/internal/agent"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 var startTime = time.Now()
 var rateLimiter = NewRateLimiter(30, 1*time.Minute)
@@ -88,6 +89,7 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 	http.HandleFunc("/health", handleHealth)
 	http.HandleFunc("/live", handleLiveness) 
 	http.HandleFunc("/ready", handleReadiness)
+	http.Handle("/metrics", promhttp.Handler()) 
 
 	srv := &http.Server{
 		Addr:         "0.0.0.0" + port,

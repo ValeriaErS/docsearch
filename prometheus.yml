@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'docsearch'
+    static_configs:
+      - targets: ['docsearch:8080']  
+    metrics_path: '/metrics'
