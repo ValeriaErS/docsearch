@@ -99,6 +99,19 @@
 
         #exportBtn {
             right: 90px;
+            color: rgba(255,255,255,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #exportBtn:hover {
+            color: rgba(255,255,255,0.5);
+            background: rgba(255,255,255,0.06);
+        }
+
+        #exportBtn svg {
+            stroke: currentColor;
         }
 
         .clear-btn:hover {
@@ -348,7 +361,14 @@
         <div class="logo">DocSearch</div>
 
         <button class="clear-btn" id="clearBtn" title="Очистить чат">⟲</button>
-        <button class="clear-btn" id="exportBtn" title="Скачать историю">📥</button>
+        
+        <button class="clear-btn" id="exportBtn" title="Скачать историю">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+        </button>
 
         <div class="chat" id="chat">
             <div class="msg bot">
@@ -382,7 +402,7 @@
     const exportBtn = document.getElementById('exportBtn');
 
     let isProcessing = false;
-    let abortController = null;  
+    let abortController = null;
 
     clearBtn.addEventListener('click', function(e) {
         e.preventDefault();
@@ -407,50 +427,56 @@
     });
 
     function exportChat() {
-        const messages = chat.querySelectorAll('.msg');
-        const history = [];
+    const messages = chat.querySelectorAll('.msg');
+    
+    if (messages.length === 0) {
+        alert('Нет сообщений для экспорта');
+        return;
+    }
+    
+    let text = 'DOCSEARCH — ИСТОРИЯ ЧАТА\n\n';
+    text += `📅 Дата экспорта: ${new Date().toLocaleString()}\n`;
+    text += `👤 Пользователь: ${USER}\n`;
+    text += `Всего сообщений: ${messages.length}\n\n`;
+    
+    let msgNumber = 0;
+    
+    messages.forEach(msg => {
+        const isUser = msg.classList.contains('user');
+        const textDiv = msg.querySelector('div:first-child');
+        let textContent = textDiv ? textDiv.textContent.trim() : '';
         
-        messages.forEach(msg => {
-            const textDiv = msg.querySelector('div:first-child');
-            const text = textDiv ? textDiv.textContent : '';
-            const isUser = msg.classList.contains('user');
-            const sourcesEl = msg.querySelector('.sources');
-            const sources = sourcesEl ? sourcesEl.textContent.replace('Источники: ', '') : '';
-            
-            if (text) {
-                history.push({
-                    role: isUser ? 'user' : 'assistant',
-                    content: text,
-                    sources: sources || ''
-                });
-            }
-        });
-        
-        if (history.length === 0) {
-            alert('Нет сообщений для экспорта');
+        if (textContent.includes('Добро пожаловать') && messages.length === 1) {
             return;
         }
         
-        const data = {
-            exported_at: new Date().toISOString(),
-            user: USER,
-            messages: history
-        };
+        msgNumber++;
+        const role = isUser ? 'Вы' : 'DocSearch';
+        const time = new Date().toLocaleTimeString();
         
-        const json = JSON.stringify(data, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
+        text += `[${msgNumber}] ${role} (${time})\n`;
+        text += textContent + '\n';
         
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `chat_${USER}_${new Date().toISOString().slice(0,10)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const sourcesEl = msg.querySelector('.sources');
+        if (sourcesEl) {
+            text += `Источники: ${sourcesEl.textContent.replace('Источники: ', '')}\n`;
+        }
         
-        console.log('Чат экспортирован');
-    }
+        text += '\n';
+    });
+    
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat_${USER}_${new Date().toISOString().slice(0,10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
 
     function addMessage(text, isUser, sources, timings) {
         const msg = document.createElement('div');
@@ -480,10 +506,10 @@
             copyBtn.style.display = 'flex';
             copyBtn.style.alignItems = 'center';
             copyBtn.style.justifyContent = 'center';
-            copyBtn.style.width = '28px';      
-            copyBtn.style.height = '28px';     
-            copyBtn.style.transition = 'background-color 0.2s'; 
-            copyBtn.style.opacity = '1'; 
+            copyBtn.style.width = '28px';
+            copyBtn.style.height = '28px';
+            copyBtn.style.transition = 'background-color 0.2s';
+            copyBtn.style.opacity = '1';
             copyBtn.title = 'Копировать ответ';
 
             copyBtn.innerHTML = `
@@ -555,14 +581,12 @@
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text)
                 .then(() => {
-                   
                     button.innerHTML = `
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M20 6L9 17L4 12" stroke="rgba(255, 255, 0, 0.6)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
                         </svg>
                     `;
                     setTimeout(() => {
-                       
                         button.innerHTML = `
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" stroke="rgba(255,255,255,0.6)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></rect>
@@ -591,7 +615,6 @@
         textarea.select();
         try {
             document.execCommand('copy');
-           
             button.innerHTML = `
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M20 6L9 17L4 12" stroke="rgba(255, 255, 0, 0.6)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
@@ -627,14 +650,13 @@
 
     function stopSearch() {
         if (abortController) {
-            abortController.abort();  
+            abortController.abort();
             abortController = null;
         }
         isProcessing = false;
         
         const stopBtn = document.getElementById('stopBtn');
         if (stopBtn) stopBtn.remove();
-
 
         btn.style.display = 'inline-block';
         btn.disabled = false;
@@ -692,7 +714,7 @@
                 'Authorization': 'Bearer ' + localStorage.getItem('token')
             },
             body: JSON.stringify({ query: q }),
-            signal: abortController.signal  
+            signal: abortController.signal
         })
         .then(res => res.json())
         .then(data => {
@@ -706,7 +728,6 @@
             }
         })
         .catch(e => {
-           
             if (e.name !== 'AbortError') {
                 wait.remove();
                 addMessage('Ошибка соединения с сервером.', false);
