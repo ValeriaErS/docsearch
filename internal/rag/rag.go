@@ -17,12 +17,12 @@ import (
 	"docsearch/internal/verify"
 	"docsearch/internal/logger"
 	"docsearch/internal/request"
-	prommetrics "docsearch/internal/metrics"
+	"docsearch/internal/metrics"
 )
 
 func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
-	prommetrics.ActiveRequests.Inc()
-    defer prommetrics.ActiveRequests.Dec()
+	metrics.ActiveRequests.Inc()
+    defer metrics.ActiveRequests.Dec()
 
 	startTotal := time.Now()
 
@@ -542,14 +542,14 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		"search": searchDuration,
 		"llm":    llmDuration,
 	}
-	prommetrics.RequestDuration.WithLabelValues("ask").Observe(time.Since(startTotal).Seconds())
-prommetrics.RetrievedChunks.Observe(float64(len(texts)))
-prommetrics.TokensUsed.Observe(float64(tokensUsed))
+	metrics.RequestDuration.WithLabelValues("ask").Observe(time.Since(startTotal).Seconds())
+metrics.RetrievedChunks.Observe(float64(len(texts)))
+metrics.TokensUsed.Observe(float64(tokensUsed))
 
 if len(texts) > 0 {
-    prommetrics.RequestsTotal.WithLabelValues("ask", "success").Inc()
+    metrics.RequestsTotal.WithLabelValues("ask", "success").Inc()
 } else {
-    prommetrics.RequestsTotal.WithLabelValues("ask", "empty").Inc()
+    metrics.RequestsTotal.WithLabelValues("ask", "empty").Inc()
 }
 
 	return texts, docs, scores, answer, pages, chunkIDs, tokensUsed, timings
