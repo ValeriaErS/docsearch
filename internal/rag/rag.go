@@ -17,7 +17,7 @@ import (
 	"docsearch/internal/verify"
 	"docsearch/internal/logger"
 	"docsearch/internal/request"
-	"./internal/metrics"
+	"docsearch/internal/metrics"
 )
 
 func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
