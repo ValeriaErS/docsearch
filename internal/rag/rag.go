@@ -18,7 +18,16 @@ import (
 	"docsearch/internal/logger"
 	"docsearch/internal/request"
 	//"docsearch/internal/metrics"
+	"docsearch/internal/alert"   
+    "os" 
+	"strings"
 )
+var redisCache *cache.RedisCache
+
+func InitRedisCache(addr string, ttl time.Duration) {
+    redisCache = cache.NewRedisCache(addr, "", 0, ttl)
+	}
+var errorAlertSent = false
 
 func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
 	//metrics.ActiveRequests.Inc()
@@ -433,6 +442,17 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		if err != nil {
 			fmt.Printf("Ошибка LLM: %v\n", err)
 			monitorMetrics.SetError(err.Error())
+
+			if !errorAlertSent {
+        token := os.Getenv("TELEGRAM_BOT_TOKEN")
+        chatID := os.Getenv("TELEGRAM_CHAT_ID")
+        if token != "" && chatID != "" {
+            bot := alert.NewTelegramBot(token, chatID)
+            bot.Send("Ошибка LLM: " + err.Error())
+            errorAlertSent = true
+        }
+    }
+
 			return texts, docs, scores, "LLM не отвечает", pages, chunkIDs, 0, map[string]float64{}
 		}
 		fmt.Printf("LLM ответила, длина: %d символов\n", len(answer))
@@ -542,6 +562,28 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		"search": searchDuration,
 		"llm":    llmDuration,
 	}
+	if redisCache != nil && len(texts) > 0 && answer != "" {
+    hasInfo := !strings.Contains(answer, "нет информации") && 
+               !strings.Contains(answer, "не найдено") &&
+               !strings.Contains(answer, "В документации нет информации по этому вопросу.")
+    
+    if hasInfo {
+        cachedAnswer := &cache.CachedAnswer{
+            Answer:    answer,
+            Sources:   docs,
+            Tokens:    tokensUsed,
+            Timestamp: time.Now(),
+        }
+        err := redisCache.SaveAnswer(context.Background(), question, userID, cachedAnswer)
+        if err != nil {
+            fmt.Printf("Ошибка сохранения в Redis: %v\n", err)
+        } else {
+            fmt.Println("Ответ сохранён в Redis кеш")
+        }
+    } else {
+        fmt.Println("Ответ не содержит информации, пропускаем кеширование")
+    }
+}
 	/*metrics.RequestDuration.WithLabelValues("ask").Observe(time.Since(startTotal).Seconds())
 metrics.RetrievedChunks.Observe(float64(len(texts)))
 metrics.TokensUsed.Observe(float64(tokensUsed))

@@ -20,7 +20,10 @@ import (
 	"net"
 	"docsearch/internal/agent"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"docsearch/internal/alert"
 )
+var telegramBot *alert.TelegramBot
+
 var startTime = time.Now()
 var rateLimiter = NewRateLimiter(30, 1*time.Minute)
 
@@ -55,6 +58,16 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
 		return
 	}
 	defer database.Close()
+
+	 token := os.Getenv("TELEGRAM_BOT_TOKEN")
+    chatID := os.Getenv("TELEGRAM_CHAT_ID")
+    if token != "" && chatID != "" {
+        telegramBot = alert.NewTelegramBot(token, chatID)
+        telegramBot.Send("DocSearch запущен")
+        fmt.Println("Telegram бот инициализирован")
+    } else {
+        fmt.Println("Telegram бот не настроен (нет токена или chat_id)")
+    }
 
     rateLimitMiddleware := func(next http.HandlerFunc) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {

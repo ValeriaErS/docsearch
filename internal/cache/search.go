@@ -114,3 +114,9 @@ func (c *SearchResultCache) Stats() int {  //  возвращает статис
 	defer c.mu.RUnlock()
 	return len(c.cache)
 }
+var redisCache *RedisCache
+
+func SetRedisCache(cache *RedisCache) {
+    redisCache = cache
+}
+

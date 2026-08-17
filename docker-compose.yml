@@ -24,10 +24,22 @@ services:
       - DATABASE_URL=${DATABASE_URL:-}
       - JWT_SECRET=${JWT_SECRET:-}
       - LLM_API_KEY=${LLM_API_KEY:-}
+      - REDIS_ADDR=redis:6379
     volumes:
       - ./docs:/app/docs
     depends_on:
       - qdrant
+      - redis
+    networks:
+      - docsearch
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - docsearch
     restart: unless-stopped
@@ -63,6 +75,7 @@ volumes:
   qdrant_data:
   prometheus_data:
   grafana_data:
+  redis_data:
 
 networks:
   docsearch:
