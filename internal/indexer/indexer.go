@@ -16,7 +16,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"docsearch/internal/parser" 
 )
 
 type Indexer struct { //структура индексации
@@ -35,40 +34,7 @@ func NewIndexer(cfg *config.Config, vc vector.VectorStore, userID string) *Index
 	}
 }
 
-func (i *Indexer) loadDocument(path string) (corpus.Document, error) {
-	ext := strings.ToLower(filepath.Ext(path))
-	var doc corpus.Document
-
-	if ext == ".pdf" {
-		parsed, err := parser.ParsePDFDocling(path)   // использую умный парсер docling
-		if err != nil {
-			fmt.Printf("Docling не сработал: %v, пробую fallback\n", err)
-			return i.loadDocumentFallback(path)
-		}
-
-		doc = corpus.Document{
-			Name:        parsed.Name,
-			Text:        parsed.Text,
-			Pages:       make(map[int]string),
-			PageOffsets: []int{},
-		}
-		return doc, nil
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return doc, err
-	}
-
-	doc = corpus.Document{
-		Name:        filepath.Base(path),
-		Text:        string(data),
-		Pages:       make(map[int]string),
-		PageOffsets: []int{},
-	}
-	return doc, nil
-}
-func (i *Indexer) loadDocumentFallback(path string) (corpus.Document, error) {
+func (i *Indexer) loadDocumentPDF(path string) (corpus.Document, error) { // загружаю PDF через ledongthuc/pdf
 	file, reader, err := pdf.Open(path)
 	if err != nil {
 		return corpus.Document{}, fmt.Errorf("ошибка открытия PDF: %w", err)
@@ -80,8 +46,8 @@ func (i *Indexer) loadDocumentFallback(path string) (corpus.Document, error) {
 	var pageOffsets []int
 	offset := 0
 
-	for i := 1; i <= reader.NumPage(); i++ {
-		page := reader.Page(i)
+	for pageNum := 1; pageNum <= reader.NumPage(); pageNum++ { // прохожу по всем страницам
+		page := reader.Page(pageNum)
 		if page.V.IsNull() {
 			continue
 		}
@@ -90,7 +56,7 @@ func (i *Indexer) loadDocumentFallback(path string) (corpus.Document, error) {
 			continue
 		}
 		pageOffsets = append(pageOffsets, offset)
-		pages[i] = content
+		pages[pageNum] = content
 		fullText.WriteString(content)
 		fullText.WriteString("\n")
 		offset += len(content) + 1
@@ -101,6 +67,30 @@ func (i *Indexer) loadDocumentFallback(path string) (corpus.Document, error) {
 		Text:        fullText.String(),
 		Pages:       pages,
 		PageOffsets: pageOffsets,
+	}
+	return doc, nil
+}
+
+func (i *Indexer) loadDocument(path string) (corpus.Document, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	var doc corpus.Document
+
+	if ext == ".pdf" {
+		// Всегда используем ledongthuc/pdf для PDF (работает на Windows)
+		return i.loadDocumentPDF(path)
+	}
+
+	// Для txt, md, html
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return doc, err
+	}
+
+	doc = corpus.Document{
+		Name:        filepath.Base(path),
+		Text:        string(data),
+		Pages:       make(map[int]string),
+		PageOffsets: []int{},
 	}
 	return doc, nil
 }

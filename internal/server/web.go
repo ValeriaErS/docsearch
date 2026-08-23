@@ -21,6 +21,7 @@ import (
 	"docsearch/internal/agent"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"docsearch/internal/alert"
+	"docsearch/internal/llm"
 )
 var telegramBot *alert.TelegramBot
 
@@ -88,6 +89,7 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
             next(w, r)
         }
     }
+	http.HandleFunc("/ask/stream", rateLimitMiddleware(RequestIDMiddleware(handleAskStream)))
 
 	http.HandleFunc("/ask", rateLimitMiddleware(RequestIDMiddleware(handleAsk)))
     http.HandleFunc("/agent/ask", rateLimitMiddleware(RequestIDMiddleware(handleAgentAsk)))
@@ -502,4 +504,88 @@ func handleReadiness(w http.ResponseWriter, r *http.Request) {  //проверк
     json.NewEncoder(w).Encode(map[string]string{
         "status": "ready",
     })
+}
+// обработчик streaming
+func handleAskStream(w http.ResponseWriter, r *http.Request) {
+    authHeader := r.Header.Get("Authorization")
+    if authHeader == "" {
+        http.Error(w, "Нет токена", http.StatusUnauthorized)
+        return
+    }
+
+    tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+    username, err := auth.CheckToken(tokenString)
+    if err != nil {
+        http.Error(w, "Неверный токен", http.StatusUnauthorized)
+        return
+    }
+
+    if r.Method != "POST" {
+        http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)
+        return
+    }
+
+    var req struct {
+        Query string `json:"query"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Ошибка запроса", http.StatusBadRequest)
+        return
+    }
+
+    if req.Query == "" {
+        http.Error(w, "Пустой вопрос", http.StatusBadRequest)
+        return
+    }
+
+    userID := username
+
+    // Получаем контекст через RAG (поиск чанков)
+    texts, docs, _, _, pages, _, _, _ := rag.Ask(r.Context(), *globalCfg, req.Query, userID, []map[string]string{}, vectorClientGlobal)
+
+    if len(texts) == 0 {
+        w.Header().Set("Content-Type", "text/event-stream")
+        w.Header().Set("Cache-Control", "no-cache")
+        fmt.Fprintf(w, "data: В документации нет информации по этому вопросу.\n\n")
+        return
+    }
+
+    // Отправляем streaming ответ
+    w.Header().Set("Content-Type", "text/event-stream")
+    w.Header().Set("Cache-Control", "no-cache")
+    w.Header().Set("Connection", "keep-alive")
+
+    flusher, ok := w.(http.Flusher)
+    if !ok {
+        http.Error(w, "Streaming не поддерживается", http.StatusInternalServerError)
+        return
+    }
+
+    // Отправляем источники
+    sourcesData, _ := json.Marshal(docs)
+    fmt.Fprintf(w, "data: {\"sources\": %s}\n\n", sourcesData)
+    flusher.Flush()
+
+    // Получаем streaming ответ от LLM
+    stream, err := llm.GetAnswerStream(r.Context(), req.Query, texts, docs, pages, globalCfg)
+    if err != nil {
+        fmt.Fprintf(w, "data: Ошибка получения ответа: %s\n\n", err.Error())
+        flusher.Flush()
+        return
+    }
+
+    for chunk := range stream {
+        if chunk.Error != nil {
+            fmt.Fprintf(w, "data: Ошибка: %s\n\n", chunk.Error.Error())
+            flusher.Flush()
+            continue
+        }
+        if chunk.Done {
+            fmt.Fprintf(w, "data: [DONE]\n\n")
+            flusher.Flush()
+            break
+        }
+        fmt.Fprintf(w, "data: %s\n\n", chunk.Content)
+        flusher.Flush()
+    }
 }

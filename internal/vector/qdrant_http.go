@@ -23,7 +23,6 @@ type QdrantClient struct {
 }
 
 func NewQdrantClient() (*QdrantClient, error) { // создаю нового клиента
-	/* return &QdrantClient{Host: "localhost", Port: 6333}*/
 	host := os.Getenv("QDRANT_HOST")
 	if host == "" {
 		return nil, fmt.Errorf("QDRANT_HOST не задан в .env")
@@ -133,7 +132,9 @@ func (q *QdrantClient) Save(ctx context.Context, name string, id string, vec []f
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	r, err := retryRequest(req, 3)
+	// используем клиент напрямую, не retryRequest, чтобы не терять тело запроса
+	client := &http.Client{Timeout: 60 * time.Second}
+	r, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("ошибка сохранения: %w", err)
 	}
@@ -244,14 +245,14 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 		Timeout: 60 * time.Second,
 	}
 	var bodyBytes []byte
-    if req.Body != nil {
-        var err error
-        bodyBytes, err = io.ReadAll(req.Body)
-        req.Body.Close()
-        if err != nil {
-            return nil, fmt.Errorf("ошибка чтения тела запроса: %w", err)
-        }
-    }
+	if req.Body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(req.Body)
+		req.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("ошибка чтения тела запроса: %w", err)
+		}
+	}
 
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -260,10 +261,9 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 			time.Sleep(time.Duration(attempt) * time.Second)
 		}
 		if len(bodyBytes) > 0 {
-            req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-            req.ContentLength = int64(len(bodyBytes))
-        }
-
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			req.ContentLength = int64(len(bodyBytes))
+		}
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -272,7 +272,7 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-            return resp, nil
+			return resp, nil
 		}
 
 		body, _ := io.ReadAll(resp.Body)
@@ -289,83 +289,83 @@ func retryRequest(req *http.Request, maxRetries int) (*http.Response, error) { /
 }
 
 func (q *QdrantClient) GetAllVectors(ctx context.Context, name string, userID string) ([]map[string]interface{}, error) { //все векторы из бд
-    var allPoints []map[string]interface{}
+	var allPoints []map[string]interface{}
 	var offset interface{}
-	limit:=100
+	limit := 100
 
-	for{
-	d := map[string]interface{}{
-		"limit":        limit,
-		"with_vector":  true,
-		"with_payload": true,
-	}
+	for {
+		d := map[string]interface{}{
+			"limit":        limit,
+			"with_vector":  true,
+			"with_payload": true,
+		}
 
-	if userID != "" {
-		d["filter"] = map[string]interface{}{
-			"must": []map[string]interface{}{
-				{
-					"key": "user_id",
-					"match": map[string]interface{}{
-						"value": userID,
+		if userID != "" {
+			d["filter"] = map[string]interface{}{
+				"must": []map[string]interface{}{
+					{
+						"key": "user_id",
+						"match": map[string]interface{}{
+							"value": userID,
+						},
 					},
 				},
-			},
+			}
 		}
-	}
-	if offset!=nil{
-		d["offset"]=offset
-	}
+		if offset != nil {
+			d["offset"] = offset
+		}
 
-	j, err := json.Marshal(d)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка маршалинга: %w", err)
-	}
+		j, err := json.Marshal(d)
+		if err != nil {
+			return nil, fmt.Errorf("ошибка маршалинга: %w", err)
+		}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", q.url("/collections/"+name+"/points/scroll"), bytes.NewBuffer(j))
-	if err != nil {
-		return nil, fmt.Errorf("ошибка создания запроса: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
+		req, err := http.NewRequestWithContext(ctx, "POST", q.url("/collections/"+name+"/points/scroll"), bytes.NewBuffer(j))
+		if err != nil {
+			return nil, fmt.Errorf("ошибка создания запроса: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
 
-	r, err := retryRequest(req, 3)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка запроса к Qdrant: %w", err)
-	}
+		r, err := retryRequest(req, 3)
+		if err != nil {
+			return nil, fmt.Errorf("ошибка запроса к Qdrant: %w", err)
+		}
 
-	var res struct {
-		Result struct {
-			Points []struct {
-				Id      string                 `json:"id"`
-				Vector  []float32              `json:"vector"`
-				Payload map[string]interface{} `json:"payload"`
-			} `json:"points"`
-			NextPageOffset interface{} `json:"next_page_offset"`
-		} `json:"result"`
-	}
+		var res struct {
+			Result struct {
+				Points []struct {
+					Id      string                 `json:"id"`
+					Vector  []float32              `json:"vector"`
+					Payload map[string]interface{} `json:"payload"`
+				} `json:"points"`
+				NextPageOffset interface{} `json:"next_page_offset"`
+			} `json:"result"`
+		}
 
-	if err := json.NewDecoder(r.Body).Decode(&res); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&res); err != nil {
+			r.Body.Close()
+			return nil, fmt.Errorf("ошибка парсинга ответа: %w", err)
+		}
 		r.Body.Close()
-		return nil, fmt.Errorf("ошибка парсинга ответа: %w", err)
-	}
-	r.Body.Close()
 
-	for _, point := range res.Result.Points {
-		allPoints = append(allPoints, map[string]interface{}{
-			"id":      point.Id,
-			"vector":  point.Vector,
-			"payload": point.Payload,
-		})
+		for _, point := range res.Result.Points {
+			allPoints = append(allPoints, map[string]interface{}{
+				"id":      point.Id,
+				"vector":  point.Vector,
+				"payload": point.Payload,
+			})
+		}
+		if res.Result.NextPageOffset == nil { // если следующей страницы нет  выхожу
+			break
+		}
+		offset = res.Result.NextPageOffset
 	}
-	if res.Result.NextPageOffset==nil{ // если следующей страницы нет  выхожу
-		break
-	}
-	offset=res.Result.NextPageOffset
-}
-return allPoints,nil
+	return allPoints, nil
 }
 
-func (q *QdrantClient) SearchText(ctx context.Context, name string, query string, limit int, userID string) ([]map[string]interface{}, error) {   //  выполняет полнотекстовый поиск по полю text
-	
+func (q *QdrantClient) SearchText(ctx context.Context, name string, query string, limit int, userID string) ([]map[string]interface{}, error) { //  выполняет полнотекстовый поиск по полю text
+
 	if err := q.EnsureTextIndex(ctx, name); err != nil {
 		fmt.Printf("Ошибка создания текстового индекса: %v\n", err)
 		return []map[string]interface{}{}, nil
@@ -382,7 +382,7 @@ func (q *QdrantClient) SearchText(ctx context.Context, name string, query string
 				},
 			},
 		},
-		"limit": limit,
+		"limit":        limit,
 		"with_payload": true,
 		"search": map[string]interface{}{
 			"field": "text",
@@ -422,12 +422,11 @@ func (q *QdrantClient) SearchText(ctx context.Context, name string, query string
 	out := []map[string]interface{}{}
 	for _, item := range result.Result {
 		out = append(out, map[string]interface{}{
-			"id": item.Id,
-			"score": item.Score,
+			"id":      item.Id,
+			"score":   item.Score,
 			"payload": item.Payload,
 		})
 	}
 
 	return out, nil
 }
-
