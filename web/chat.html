@@ -360,9 +360,9 @@
     <div class="card">
         <div class="logo">DocSearch</div>
 
-        <button class="clear-btn" id="clearBtn" title="Очистить чат">⟲</button>
+        <button class="clear-btn" id="clearBtn" title="clear chat">⟲</button>
         
-        <button class="clear-btn" id="exportBtn" title="Скачать историю">
+        <button class="clear-btn" id="exportBtn" title="export history">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
@@ -435,8 +435,8 @@
     }
     
     let text = 'DOCSEARCH — ИСТОРИЯ ЧАТА\n\n';
-    text += `📅 Дата экспорта: ${new Date().toLocaleString()}\n`;
-    text += `👤 Пользователь: ${USER}\n`;
+    text += `Дата экспорта: ${new Date().toLocaleString()}\n`;
+    text += `Пользователь: ${USER}\n`;
     text += `Всего сообщений: ${messages.length}\n\n`;
     
     let msgNumber = 0;
@@ -476,7 +476,6 @@
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
-
 
     function addMessage(text, isUser, sources, timings) {
         const msg = document.createElement('div');
@@ -565,9 +564,9 @@
             const llm = timings.llm ? timings.llm.toFixed(2) : '0.00';
 
             let text = `Общее время: ${total} сек\n`;
-            text += `── Эмбеддинг: ${embed} сек\n`;
-            text += `── Поиск: ${search} сек\n`;
-            text += `── LLM: ${llm} сек`;
+            text += `-- Эмбеддинг: ${embed} сек\n`;
+            text += `-- Поиск: ${search} сек\n`;
+            text += `-- LLM: ${llm} сек`;
 
             timeDiv.textContent = text;
             msg.appendChild(timeDiv);
@@ -700,23 +699,42 @@
 
         const wait = document.createElement('div');
         wait.className = 'msg bot';
-        wait.textContent = 'Ищу';
+        wait.textContent = 'Ищу...';
         wait.style.opacity = '0.6';
         chat.appendChild(wait);
         chat.scrollTop = chat.scrollHeight;
 
         abortController = new AbortController();
 
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('Нет токена!');
+            wait.remove();
+            addMessage('Ошибка: нет токена авторизации. Перезайдите.', false);
+            isProcessing = false;
+            input.disabled = false;
+            btn.style.display = 'inline-block';
+            btn.disabled = false;
+            btn.textContent = 'Отправить';
+            input.placeholder = 'Напиши свой вопрос...';
+            return;
+        }
+
         fetch('/ask', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + localStorage.getItem('token')
+                'Authorization': 'Bearer ' + token
             },
             body: JSON.stringify({ query: q }),
             signal: abortController.signal
         })
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Ошибка сервера: ' + res.status);
+            }
+            return res.json();
+        })
         .then(data => {
             console.log("Ответ от сервера:", data);
             wait.remove();
@@ -730,7 +748,7 @@
         .catch(e => {
             if (e.name !== 'AbortError') {
                 wait.remove();
-                addMessage('Ошибка соединения с сервером.', false);
+                addMessage('Ошибка соединения с сервером. Проверь, что сервер запущен.', false);
                 console.error("Ошибка:", e);
             }
         })
@@ -752,7 +770,7 @@
         });
     }
 
-    btn.addEventListener('click', function(e) {
+     btn.addEventListener('click', function(e) {
         e.preventDefault();
         sendQuestion();
     });
@@ -763,6 +781,6 @@
             sendQuestion();
         }
     });
-    </script>
+</script>
 </body>
 </html>
