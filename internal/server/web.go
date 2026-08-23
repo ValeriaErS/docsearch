@@ -505,8 +505,7 @@ func handleReadiness(w http.ResponseWriter, r *http.Request) {  //проверк
         "status": "ready",
     })
 }
-// обработчик streaming
-func handleAskStream(w http.ResponseWriter, r *http.Request) {
+func handleAskStream(w http.ResponseWriter, r *http.Request) {  // обработчик streaming
     authHeader := r.Header.Get("Authorization")
     if authHeader == "" {
         http.Error(w, "Нет токена", http.StatusUnauthorized)
@@ -540,7 +539,6 @@ func handleAskStream(w http.ResponseWriter, r *http.Request) {
 
     userID := username
 
-    // Получаем контекст через RAG (поиск чанков)
     texts, docs, _, _, pages, _, _, _ := rag.Ask(r.Context(), *globalCfg, req.Query, userID, []map[string]string{}, vectorClientGlobal)
 
     if len(texts) == 0 {
@@ -550,7 +548,6 @@ func handleAskStream(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Отправляем streaming ответ
     w.Header().Set("Content-Type", "text/event-stream")
     w.Header().Set("Cache-Control", "no-cache")
     w.Header().Set("Connection", "keep-alive")
@@ -561,12 +558,10 @@ func handleAskStream(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Отправляем источники
     sourcesData, _ := json.Marshal(docs)
     fmt.Fprintf(w, "data: {\"sources\": %s}\n\n", sourcesData)
     flusher.Flush()
 
-    // Получаем streaming ответ от LLM
     stream, err := llm.GetAnswerStream(r.Context(), req.Query, texts, docs, pages, globalCfg)
     if err != nil {
         fmt.Fprintf(w, "data: Ошибка получения ответа: %s\n\n", err.Error())

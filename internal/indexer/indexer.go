@@ -76,11 +76,9 @@ func (i *Indexer) loadDocument(path string) (corpus.Document, error) {
 	var doc corpus.Document
 
 	if ext == ".pdf" {
-		// Всегда используем ledongthuc/pdf для PDF (работает на Windows)
 		return i.loadDocumentPDF(path)
 	}
 
-	// Для txt, md, html
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return doc, err

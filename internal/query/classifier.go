@@ -83,7 +83,6 @@ INVALID, если:
 
 	response = strings.TrimSpace(response)
 
-	// Ищем JSON в ответе
 	jsonStr := extractJSON(response)
 	if jsonStr == "" {
 		return false, fmt.Errorf("не удалось распарсить ответ классификатора")
@@ -101,13 +100,12 @@ INVALID, если:
 }
 
 func extractJSON(s string) string {
-    // Ищем первую {
+    
     start := strings.Index(s, "{")
     if start == -1 {
         return ""
     }
 
-    // Ищем закрывающую }
     braceCount := 0
     for i := start; i < len(s); i++ {
         if s[i] == '{' {

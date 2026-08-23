@@ -29,7 +29,6 @@ func GetAnswerStream(ctx context.Context, question string, chunks []string, docN
 
     url := cfg.LLM.BaseURL + "/chat/completions"
 
-    // Собираем контекст
     context := ""
     for i := 0; i < len(chunks); i++ {
         docName := "неизвестный документ"

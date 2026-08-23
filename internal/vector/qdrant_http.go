@@ -132,7 +132,6 @@ func (q *QdrantClient) Save(ctx context.Context, name string, id string, vec []f
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// используем клиент напрямую, не retryRequest, чтобы не терять тело запроса
 	client := &http.Client{Timeout: 60 * time.Second}
 	r, err := client.Do(req)
 	if err != nil {
