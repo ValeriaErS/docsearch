@@ -1,0 +1,277 @@
+basePath: /
+host: localhost:8080
+info:
+  contact:
+    email: verokhina@sfedu.ru
+    name: Valeria
+  description: |-
+    API для поиска по документации с использованием RAG
+    Система позволяет задавать вопросы, получать ответы с источниками, управлять документами
+  license:
+    name: MIT
+  title: DocSearch API
+  version: 1.0.0
+paths:
+  /agent/ask:
+    post:
+      consumes:
+      - application/json
+      description: Отправляет вопрос AI-агенту, который использует RAG
+      parameters:
+      - description: Запрос с вопросом
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Ответ агента
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Задать вопрос агенту
+      tags:
+      - Agent
+  /ask:
+    post:
+      consumes:
+      - application/json
+      description: Отправляет вопрос в RAG систему и возвращает ответ с источниками
+      parameters:
+      - description: Запрос с вопросом
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Ответ с answer, sources, timings
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Задать вопрос
+      tags:
+      - Ask
+  /ask/stream:
+    post:
+      consumes:
+      - application/json
+      description: Отправляет вопрос в RAG и возвращает ответ через Server-Sent Events
+      parameters:
+      - description: Запрос с вопросом
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: Потоковый ответ
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Потоковый ответ на вопрос
+      tags:
+      - Ask
+  /health:
+    get:
+      description: Проверяет доступность Qdrant и других компонентов
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Все компоненты работают
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Проверка здоровья системы
+      tags:
+      - Health
+  /live:
+    get:
+      description: Проверяет, жив ли процесс (для Kubernetes)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Process is alive
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Liveness probe
+      tags:
+      - Health
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Авторизация пользователя, возвращает JWT токен
+      parameters:
+      - description: Логин и пароль
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Токен и имя пользователя
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Вход в систему
+      tags:
+      - Auth
+  /ready:
+    get:
+      description: Проверяет, готов ли сервер принимать запросы (для Kubernetes)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Ready to serve
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Not ready
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Readiness probe
+      tags:
+      - Health
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: Создание нового пользователя
+      parameters:
+      - description: Логин и пароль
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешная регистрация
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict (пользователь уже существует)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Регистрация
+      tags:
+      - Auth
+securityDefinitions:
+  BearerAuth:
+    description: 'Введите токен в формате: Bearer <token>'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

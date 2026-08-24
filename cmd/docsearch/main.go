@@ -18,8 +18,26 @@ import (
 	"docsearch/internal/logger"
 	"docsearch/internal/agent"
 	"docsearch/internal/cache"
+	 _ "docsearch/docs" 
 	
 )
+// @title DocSearch API
+// @version 1.0.0
+// @description API для поиска по документации с использованием RAG
+// @description Система позволяет задавать вопросы, получать ответы с источниками, управлять документами
+
+// @contact.name Valeria
+// @contact.email verokhina@sfedu.ru
+
+// @license.name MIT
+
+// @host localhost:8080
+// @BasePath /
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Введите токен в формате: Bearer <token>
 
 type Source struct { // структура для json
 	DocID   string  `json:"doc_id"`
