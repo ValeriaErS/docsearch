@@ -71,13 +71,16 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 	complexity := query.ClassifyComplexity(question) // определяю сложность запроса и выбираю стратегию
 	strategy := query.GetRetrievalStrategy(complexity)
 
-	fmt.Printf("[%s] complexity=%s strategy=%q TopK=%d rw=%v hyb=%v rr=%v mq=%v\n",
-		requestID, complexity, strategy.Description,
-		strategy.TopK, strategy.UseRewriting, strategy.UseHybrid,
-		strategy.UseRerank, strategy.UseMultiQuery)
+	fmt.Printf("[%s] complexity=%s strategy=%q CandidateTopK=%d FinalTopK=%d rw=%v hyb=%v rr=%v mq=%v\n",
+    requestID, complexity, strategy.Description,
+    strategy.CandidateTopK, strategy.FinalTopK, 
+    strategy.UseRewriting, strategy.UseHybrid, 
+    strategy.UseRerank, strategy.UseMultiQuery)
 
 	effectiveCfg := cfg
-	effectiveCfg.Retrieval.TopK = strategy.TopK
+	effectiveCfg.Retrieval.CandidateTopK = strategy.CandidateTopK  
+	effectiveCfg.Retrieval.RerankTopK = strategy.RerankTopK        
+	effectiveCfg.Retrieval.FinalTopK = strategy.FinalTopK    
 	effectiveCfg.Retrieval.EnableRewriting = strategy.UseRewriting
 	effectiveCfg.Retrieval.HybridSearch = strategy.UseHybrid
 	effectiveCfg.Retrieval.EnableRerank = strategy.UseRerank
@@ -94,7 +97,7 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 	monitorMetrics.SetRetrievalRounds(1)
 
 	queryForSearch := question
-	var multiQueryResults []map[string]interface{}
+	//var multiQueryResults []map[string]interface{}
 	rewriter := query.NewQueryRewriter(&cfg)
 
 	fmt.Printf("Рерайтер создан, EnableRewriting=%v, EnableHyDE=%v\n",
@@ -139,177 +142,176 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 	var embedDuration float64
 	var searchDuration float64
 
-	if fromCache {
-		embedDuration = 0
-		searchDuration = 0
-		fmt.Printf("Использую кэшированные результаты (%d документов)\n", len(results))
-	} else {
-		
-		if cfg.Retrieval.EnableMultiQuery {   //muiti qery
-			fmt.Printf("Запускаю Multi-Query поиск...\n")
+	// ===== НОВЫЙ RETRIEVAL PIPELINE =====
+// Теперь мы используем CandidateTopK, RerankTopK, FinalTopK
 
-			variants, err := query.GenerateMultiQueries(ctx, queryForSearch, &cfg)
-			if err != nil {
-				fmt.Printf("Ошибка генерации вариантов: %v\n", err)
-				variants = []string{queryForSearch}
-			}
+if fromCache {
+    embedDuration = 0
+    searchDuration = 0
+    fmt.Printf("Использую кэшированные результаты (%d документов)\n", len(results))
+} else {
+    // ШАГ 1: Получаем эмбеддинг запроса (это было, оставляем)
+    startEmbed := time.Now()
+    vec, err := embed.GetEmbedding(ctx, queryForSearch, &cfg)
+    if err != nil {
+        return []string{}, []string{}, []float64{}, "не могу понять ваш вопрос", []int{}, []string{}, 0, map[string]float64{}
+    }
+    embedDuration = time.Since(startEmbed).Seconds()
+    monitorMetrics.SetEmbeddingDuration(time.Since(startEmbed))
 
-			var allResults []map[string]interface{}
-			for i, variant := range variants {
-				fmt.Printf("Вариант %d: '%s'\n", i+1, variant)
+    vec32 := []float32{}
+    for i := 0; i < len(vec); i++ {
+        vec32 = append(vec32, float32(vec[i]))
+    }
 
-				vec, err := embed.GetEmbedding(ctx, variant, &cfg)
-				if err != nil {
-					continue
-				}
+    // Проверяем подключение к Qdrant
+    if vectorClient == nil {
+        var err error
+        vectorClient, err = vector.NewQdrantClient()
+        if err != nil {
+            return []string{}, []string{}, []float64{}, "ошибка подключения к Qdrant", []int{}, []string{}, 0, map[string]float64{}
+        }
+        if qdrantClient, ok := vectorClient.(*vector.QdrantClient); ok {
+            qdrantClient.VectorSize = cfg.Embeddings.VectorSize
+        }
+    }
+    
+    candidateK := strategy.CandidateTopK
+    if candidateK <= 0 {
+        candidateK = 50 
+    }
+    fmt.Printf("Ищу %d кандидатов в Qdrant\n", candidateK)
+    
+    startSearch := time.Now()
+    results, err = vectorClient.Search(ctx, vector.CollectionName, vec32, candidateK, userID)
+    if err != nil || len(results) == 0 {
+        return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, []string{}, 0, map[string]float64{}
+    }
+    searchDuration = time.Since(startSearch).Seconds()
+    monitorMetrics.SetChunksFound(len(results))
+    monitorMetrics.SetSearchDuration(time.Since(startSearch))
 
-				vec32 := []float32{}
-				for _, v := range vec {
-					vec32 = append(vec32, float32(v))
-				}
+    if cfg.Retrieval.EnableMultiQuery { // Multi-Query
+        fmt.Printf("Запускаю Multi-Query поиск...\n")
+        variants, err := query.GenerateMultiQueries(ctx, queryForSearch, &cfg)
+        if err != nil {
+            fmt.Printf("Ошибка генерации вариантов: %v\n", err)
+            variants = []string{queryForSearch}
+        }
 
-				res, err := vectorClient.Search(ctx, vector.CollectionName, vec32, cfg.Retrieval.TopK*2, userID)
-				if err != nil || len(res) == 0 {
-					continue
-				}
+        var allResults []map[string]interface{}
+        for i, variant := range variants {
+            fmt.Printf("Вариант %d: '%s'\n", i+1, variant)
+            vec, err := embed.GetEmbedding(ctx, variant, &cfg)
+            if err != nil {
+                continue
+            }
+            vec32 := []float32{}
+            for _, v := range vec {
+                vec32 = append(vec32, float32(v))
+            }
+        
+            res, err := vectorClient.Search(ctx, vector.CollectionName, vec32, candidateK*2, userID)
+            if err != nil || len(res) == 0 {
+                continue
+            }
+            allResults = append(allResults, res...)
+        }
 
-				allResults = append(allResults, res...)
-			}
+        if len(allResults) > 0 {
+            fusedResults := retrieve.ReciprocalRankFusion(allResults)
+            if len(fusedResults) > candidateK {
+                fusedResults = fusedResults[:candidateK]
+            }
+            results = fusedResults
+            fmt.Printf("Multi-Query: объединено %d результатов\n", len(results))
+        }
+    }
 
-			if len(allResults) > 0 {
-				fusedResults := retrieve.ReciprocalRankFusion(allResults)
-				if len(fusedResults) > cfg.Retrieval.TopK*3 {
-					fusedResults = fusedResults[:cfg.Retrieval.TopK*3]
-				}
-				multiQueryResults = fusedResults
-				fmt.Printf("Multi-Query: объединено %d результатов\n", len(multiQueryResults))
-			}
-		}
+    textResults := []map[string]interface{}{} //текстовый и векторный поиск
+    if cfg.Retrieval.HybridSearch {
+        fmt.Printf("Запускаю полнотекстовый поиск (тоже с запасом %d)\n", candidateK)
+        
+        if qdrantClient, ok := vectorClient.(*vector.QdrantClient); ok {
+            textResults, _ = qdrantClient.SearchText(ctx, vector.CollectionName, queryForSearch, candidateK, userID)
+        } else if fakeClient, ok := vectorClient.(*vector.FakeVectorStore); ok {
+            textResults, _ = fakeClient.SearchText(ctx, vector.CollectionName, queryForSearch, candidateK, userID)
+        }
 
-		startEmbed := time.Now() //эмбединг
-		vec, err := embed.GetEmbedding(ctx, queryForSearch, &cfg)
-		if err != nil {
-			return []string{}, []string{}, []float64{}, "не могу понять ваш вопрос", []int{}, []string{}, 0, map[string]float64{}
-		}
-		embedDuration = time.Since(startEmbed).Seconds()
-		monitorMetrics.SetEmbeddingDuration(time.Since(startEmbed))
+        if len(textResults) > 0 {
+            fmt.Printf("Найдено %d результатов через полнотекстовый поиск\n", len(textResults))
+        }
+    }
 
-		vec32 := []float32{}
-		for i := 0; i < len(vec); i++ {
-			vec32 = append(vec32, float32(vec[i]))
-		}
+    if len(textResults) > 0 && cfg.Retrieval.HybridSearch {
+        fusedResults := retrieve.ReciprocalRankFusion(results, textResults)
+        fmt.Printf("Объединено %d векторных + %d текстовых → %d результатов\n",
+            len(results), len(textResults), len(fusedResults))
+        results = fusedResults
+    }
+    
+    rerankK := strategy.RerankTopK
+    if rerankK <= 0 {
+        rerankK = 10 
+    }
+    
+    beforeRerank := len(results)
+    rerankStart := time.Now()
 
-		if vectorClient == nil {
-			var err error
-			vectorClient, err = vector.NewQdrantClient()
-			if err != nil {
-				return []string{}, []string{}, []float64{}, "ошибка подключения к Qdrant", []int{}, []string{}, 0, map[string]float64{}
-			}
-			if qdrantClient, ok := vectorClient.(*vector.QdrantClient); ok {
-				qdrantClient.VectorSize = cfg.Embeddings.VectorSize
-			}
-		}
+    if cfg.Retrieval.EnableRerank && len(results) > rerankK {
+        fmt.Printf("Запускаю реранкинг: %d → %d\n", len(results), rerankK)
+        
+        documents := []string{}
+        for _, r := range results {
+            payload, ok := r["payload"].(map[string]interface{})
+            if !ok {
+                continue
+            }
+            chunkText, ok := payload["chunk_text"].(string)
+            if ok && chunkText != "" {
+                documents = append(documents, chunkText)
+            }
+        }
 
-		startSearch := time.Now()  //поиск векторный
-		results, err = vectorClient.Search(ctx, vector.CollectionName, vec32, cfg.Retrieval.TopK, userID)
-		if err != nil || len(results) == 0 {
-			return []string{}, []string{}, []float64{}, "ничего не нашла", []int{}, []string{}, 0, map[string]float64{}
-		}
-		searchDuration = time.Since(startSearch).Seconds()
-		monitorMetrics.SetChunksFound(len(results))
-		monitorMetrics.SetSearchDuration(time.Since(startSearch))
+        if len(documents) > 0 {
+            reranker := rerank.NewReranker(&cfg)
+            indices, _, err := reranker.Rerank(ctx, queryForSearch, documents, rerankK)
+            
+            if err == nil && len(indices) > 0 {
+                rerankedResults := []map[string]interface{}{}
+                for _, idx := range indices {
+                    if idx < len(results) {
+                        rerankedResults = append(rerankedResults, results[idx])
+                    }
+                }
+                if len(rerankedResults) > 0 {
+                    results = rerankedResults
+                    fmt.Printf("Реренкинг завершен: осталось %d документов\n", len(results))
+                }
+            }
+        }
+    }
+    pipelineLog.Rerank = &logger.RerankLog{  //логирую реранкинг
+        BeforeCount: beforeRerank,
+        AfterCount:  len(results),
+        DurationMs:  time.Since(rerankStart).Milliseconds(),
+    }
 
-		if len(multiQueryResults) > 0 {
-			results = multiQueryResults
-			fmt.Printf("Использую Multi-Query результаты: %d документов\n", len(results))
-		}
-
-		textResults := []map[string]interface{}{}  // тестовый поиск HYBRID
-		if cfg.Retrieval.HybridSearch {
-			fmt.Printf("Запускаю полнотекстовый поиск по запросу: '%s'\n", queryForSearch)
-
-			if qdrantClient, ok := vectorClient.(*vector.QdrantClient); ok {
-				textResults, _ = qdrantClient.SearchText(ctx, vector.CollectionName, queryForSearch, cfg.Retrieval.TopK*3, userID)
-			} else if fakeClient, ok := vectorClient.(*vector.FakeVectorStore); ok {
-				textResults, _ = fakeClient.SearchText(ctx, vector.CollectionName, queryForSearch, cfg.Retrieval.TopK*3, userID)
-			}
-
-			if len(textResults) > 0 {
-				fmt.Printf("Найдено %d результатов через полнотекстовый поиск\n", len(textResults))
-			} else {
-				fmt.Printf("Полнотекстовый поиск не вернул результатов\n")
-			}
-		}
-
-		if len(textResults) > 0 && cfg.Retrieval.HybridSearch {
-			fusedResults := retrieve.ReciprocalRankFusion(results, textResults)
-			fmt.Printf("Объединено %d векторных + %d текстовых → %d результатов\n",
-				len(results), len(textResults), len(fusedResults))
-			results = fusedResults
-		} else {
-			if len(results) > cfg.Retrieval.TopK {
-    results = results[:cfg.Retrieval.TopK]
+    finalK := strategy.FinalTopK
+    if finalK <= 0 {
+        finalK = 5 
+    }
+    
+    if len(results) > finalK {
+        results = results[:finalK]
+        fmt.Printf("Финальный отбор: оставлено %d чанков для LLM\n", len(results))
+    }
+    if cfg.Cache.EnableSearchCache && len(results) > 0 {
+        searchCache := cache.GetSearchCache()
+        searchCache.Set(queryForSearch, userID, results)
+        fmt.Printf("Результаты поиска сохранены в кэш\n")
+    }
 }
-		}
-
-		pipelineLog.Retrieval = &logger.RetrievalLog{  //логинг поиск
-			VectorResults: len(results),
-			TextResults:   len(textResults),
-			FusedResults:  len(results),
-			FromCache:     fromCache,
-			DurationMs:    time.Since(startSearch).Milliseconds(),
-		}
-	
-		beforeCount := len(results) // реранкинг
-		rerankStart := time.Now()
-
-		if cfg.Retrieval.EnableRerank && len(results) > cfg.Retrieval.TopK {
-			fmt.Printf("Запускаю реранкинг: %d документов\n", len(results))
-
-			documents := []string{}
-			for _, r := range results {
-				payload, ok := r["payload"].(map[string]interface{})
-				if !ok {
-					continue
-				}
-				chunkText, ok := payload["chunk_text"].(string)
-				if ok && chunkText != "" {
-					documents = append(documents, chunkText)
-				}
-			}
-
-			if len(documents) > 0 {
-				reranker := rerank.NewReranker(&cfg)
-				indices, _, err := reranker.Rerank(ctx, queryForSearch, documents, cfg.Retrieval.TopK)
-
-				if err == nil && len(indices) > 0 {
-					rerankedResults := []map[string]interface{}{}
-					for _, idx := range indices {
-						if idx < len(results) {
-							rerankedResults = append(rerankedResults, results[idx])
-						}
-					}
-					if len(rerankedResults) > 0 {
-						results = rerankedResults
-						fmt.Printf("Реренкинг завершен: осталось %d документов\n", len(results))
-					}
-				}
-			}
-		}
-
-		pipelineLog.Rerank = &logger.RerankLog{  //логинг реранкинг
-			BeforeCount: beforeCount,
-			AfterCount:  len(results),
-			DurationMs:  time.Since(rerankStart).Milliseconds(),
-		}
-
-		if cfg.Cache.EnableSearchCache && len(results) > 0 {  //сохр в кеш
-			searchCache := cache.GetSearchCache()
-			searchCache.Set(queryForSearch, userID, results)
-			fmt.Printf("Результаты поиска сохранены в кэш\n")
-		}
-		
-	}
 
 	found := false //фильтрация по порогу
 	for _, r := range results {

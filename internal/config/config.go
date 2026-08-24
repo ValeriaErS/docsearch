@@ -31,6 +31,9 @@ type Config struct {
 
 	Retrieval struct {
 		TopK            int     `yaml:"top_k"`
+		CandidateTopK   int     `yaml:"candidate_top_k"`  
+        RerankTopK      int     `yaml:"rerank_top_k"`
+		FinalTopK       int     `yaml:"final_top_k"` 
 		MinScore        float64 `yaml:"min_score"`
 		EnableRewriting bool    `yaml:"enable_rewriting"`
 		EnableHyDE      bool    `yaml:"enable_hyde"`
@@ -81,13 +84,18 @@ func LoadConfig(path string) (*Config, error) { //читает файл config.y
 	if cfg.Embeddings.VectorSize <= 0 {
 		return nil, fmt.Errorf("embeddings.vector_size должен быть больше 0 (сейчас: %d)", cfg.Embeddings.VectorSize)
 	}
-	if cfg.Retrieval.TopK <= 0 {
-		return nil, fmt.Errorf("retrieval.top_k должен быть больше 0 (сейчас: %d)", cfg.Retrieval.TopK)
-	}
+	if cfg.Retrieval.CandidateTopK <= 0 {
+    return nil, fmt.Errorf("retrieval.candidate_top_k должен быть больше 0 (сейчас: %d)", cfg.Retrieval.CandidateTopK)
+    }
+    if cfg.Retrieval.RerankTopK <= 0 {
+    return nil, fmt.Errorf("retrieval.rerank_top_k должен быть больше 0 (сейчас: %d)", cfg.Retrieval.RerankTopK)
+    }
+    if cfg.Retrieval.FinalTopK <= 0 {
+    return nil, fmt.Errorf("retrieval.final_top_k должен быть больше 0 (сейчас: %d)", cfg.Retrieval.FinalTopK)
+    }
 	if cfg.Retrieval.MinScore < 0 || cfg.Retrieval.MinScore > 1 {
 		return nil, fmt.Errorf("retrieval.min_score должен быть в [0,1] (сейчас: %.2f)", cfg.Retrieval.MinScore)
 	}
-
 	if cfg.Chunking.MaxTokens <= 0 {
 		return nil, fmt.Errorf("chunking.max_tokens должен быть больше 0 (сейчас: %d)", cfg.Chunking.MaxTokens)
 	}

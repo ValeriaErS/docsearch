@@ -13,7 +13,6 @@ embeddings:
     vector_size: 768
 
 retrieval:
-    top_k: 15
     min_score: 0.1
     enable_rewriting: false
     enable_hyde: false 
@@ -22,6 +21,9 @@ retrieval:
     enable_multi_query: false
     enable_compression: false
     enable_relevance_check: false
+    candidate_top_k: 50     
+    rerank_top_k: 10         
+    final_top_k: 5           
 
 llm:
     provider: "openrouter"

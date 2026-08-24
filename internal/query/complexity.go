@@ -64,7 +64,9 @@ func ClassifyComplexity(query string) Complexity {   //  определяет с
 	return ComplexityMedium
 }
 type RetrievalStrategy struct {  //  стратегия поиска
-	TopK          int
+	CandidateTopK  int    
+    RerankTopK     int    
+    FinalTopK      int  
 	UseRewriting  bool
 	UseHybrid     bool
 	UseRerank     bool
@@ -75,7 +77,9 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {  //  воз
 	switch complexity {
 	case ComplexitySimple:
 		return RetrievalStrategy{
-			TopK:          5,
+			CandidateTopK:  20, 
+            RerankTopK:     5,  
+            FinalTopK:      3,
 			UseRewriting:  false,
 			UseHybrid:     false,
 			UseRerank:     false,
@@ -84,7 +88,9 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {  //  воз
 		}
 	case ComplexityMedium:
 		return RetrievalStrategy{
-			TopK:          10,
+			CandidateTopK:  50,  
+            RerankTopK:     10, 
+            FinalTopK:      5,  
 			UseRewriting:  true,
 			UseHybrid:     true,
 			UseRerank:     true,
@@ -93,7 +99,9 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {  //  воз
 		}
 	case ComplexityComplex:
 		return RetrievalStrategy{
-			TopK:          15,
+			CandidateTopK:  100, 
+            RerankTopK:     15,  
+            FinalTopK:      8,  
 			UseRewriting:  true,
 			UseHybrid:     true,
 			UseRerank:     true,
@@ -102,7 +110,9 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {  //  воз
 		}
 	default:
 		return RetrievalStrategy{
-			TopK:          10,
+			CandidateTopK:  50,
+            RerankTopK:     10,
+            FinalTopK:      5,
 			UseRewriting:  true,
 			UseHybrid:     true,
 			UseRerank:     true,
