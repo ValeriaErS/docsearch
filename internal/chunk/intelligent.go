@@ -138,10 +138,10 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 
 			if currentTokens+tokenCount <= maxTokens { // влезет ли предложение в текущий чанк
 				if current != "" {
-					current = s
-					currentStartPos = sentPos
+					current = current + " " + s // добавляю предложение к текущему чанку
 				} else {
-					current = current + " " + s
+					current = s // первое предложение в чанке
+					currentStartPos = sentPos
 				}
 				currentTokens = currentTokens + tokenCount
 			} else {
@@ -190,8 +190,20 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 					}
 				}
 				if overlapBuffer != "" {
-
-					current = overlapBuffer + " " + s
+					if overlapTokensCount+tokenCount > maxTokens {
+						overlapTokensCount = maxTokens - tokenCount
+						if overlapTokensCount < 0 {
+							overlapTokensCount = 0
+							overlapBuffer = ""
+						} else {
+							overlapBuffer = truncateToTokens(overlapBuffer, overlapTokensCount, enc)
+						}
+					}
+					if overlapBuffer != "" {
+						current = overlapBuffer + " " + s
+					} else {
+						current = s
+					}
 					currentStartPos = overlapBufferStartPos
 					currentTokens = overlapTokensCount + tokenCount
 				} else {
@@ -219,4 +231,28 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 		}
 	}
 	return chunks
+}
+
+func truncateToTokens(text string, maxTokens int, enc *tiktoken.Tiktoken) string {
+	if text == "" || maxTokens <= 0 {
+		return ""
+	}
+	
+	words := strings.Fields(text)
+	var result strings.Builder
+	tokens := 0
+	
+	for _, word := range words {
+		wordTokens := len(enc.Encode(word, nil, nil))
+		if tokens+wordTokens > maxTokens {
+			break
+		}
+		if result.Len() > 0 {
+			result.WriteString(" ")
+		}
+		result.WriteString(word)
+		tokens += wordTokens
+	}
+	
+	return result.String()
 }
