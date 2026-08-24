@@ -22,6 +22,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"docsearch/internal/alert"
 	"docsearch/internal/llm"
+	 "github.com/swaggo/http-swagger"
+    _ "docsearch/docs" 
 )
 var telegramBot *alert.TelegramBot
 
@@ -89,6 +91,7 @@ func RunWeb(cfg *config.Config, port string, vectorClient vector.VectorStore) {
             next(w, r)
         }
     }
+	http.HandleFunc("/swagger/", httpSwagger.WrapHandler)
 	http.HandleFunc("/ask/stream", rateLimitMiddleware(RequestIDMiddleware(handleAskStream)))
 
 	http.HandleFunc("/ask", rateLimitMiddleware(RequestIDMiddleware(handleAsk)))
@@ -155,7 +158,17 @@ func showLogin(w http.ResponseWriter, r *http.Request) {
 func showRegister(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "web/register.html")
 }
-
+// handleLogin — вход пользователя
+// @Summary Вход в систему
+// @Description Авторизация пользователя, возвращает JWT токен
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body object true "Логин и пароль" example({"username":"test","password":"123456"})
+// @Success 200 {object} map[string]interface{} "Токен и имя пользователя"
+// @Failure 400 {object} map[string]string "Bad Request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Router /login [post]
 func handleLogin(w http.ResponseWriter, r *http.Request) { //обработчик вход
 	if r.Method != "POST" {
 		http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)
@@ -244,7 +257,17 @@ func handleLogin(w http.ResponseWriter, r *http.Request) { //обработчи�
 		})
 	}
 }
-
+// handleRegister — регистрация пользователя
+// @Summary Регистрация
+// @Description Создание нового пользователя
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body object true "Логин и пароль" example({"username":"test","password":"123456"})
+// @Success 200 {object} map[string]interface{} "Успешная регистрация"
+// @Failure 400 {object} map[string]string "Bad Request"
+// @Failure 409 {object} map[string]string "Conflict (пользователь уже существует)"
+// @Router /register [post]
 func handleRegister(w http.ResponseWriter, r *http.Request) { // обработчик регистрации
 	if r.Method != "POST" {
 		http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)
@@ -303,7 +326,19 @@ func handleRegister(w http.ResponseWriter, r *http.Request) { // обработ�
 		"user":    safeUsername,
 	})
 }
-
+// handleAsk — обработчик вопросов
+// @Summary Задать вопрос
+// @Description Отправляет вопрос в RAG систему и возвращает ответ с источниками
+// @Tags Ask
+// @Accept json
+// @Produce json
+// @Param request body object true "Запрос с вопросом" example({"query":"Что такое RAG?"})
+// @Success 200 {object} map[string]interface{} "Ответ с answer, sources, timings"
+// @Failure 400 {object} map[string]string "Bad Request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 429 {object} map[string]string "Too Many Requests"
+// @Security BearerAuth
+// @Router /ask [post]
 func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик вопрос
 	authHeader := r.Header.Get("Authorization") // проверяю токен
 	if authHeader == "" {
@@ -397,6 +432,18 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 		"timings": timings,
 	})
 }
+// @Summary Задать вопрос агенту
+// @Description Отправляет вопрос AI-агенту, который использует RAG
+// @Tags Agent
+// @Accept json
+// @Produce json
+// @Param request body object true "Запрос с вопросом" example({"query":"Что такое RAG?"})
+// @Success 200 {object} map[string]interface{} "Ответ агента"
+// @Failure 400 {object} map[string]string "Bad Request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Security BearerAuth
+// @Router /agent/ask [post]
 func handleAgentAsk(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -436,6 +483,16 @@ func handleAgentAsk(w http.ResponseWriter, r *http.Request) {
 		"answer": answer,
 	})
 }
+// handleHealth — проверка состояния
+// @Summary Проверка здоровья системы
+// @Description Проверяет доступность Qdrant и других компонентов
+// @Tags Health
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]string "Все компоненты работают"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 503 {object} map[string]string "Service Unavailable"
+// @Router /health [get]
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization") //проверка токена
 	if authHeader == "" {
@@ -466,6 +523,13 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 		"qdrant": "connected",
 	})
 }
+// handleLiveness — проверка жизни процесса
+// @Summary Liveness probe
+// @Description Проверяет, жив ли процесс (для Kubernetes)
+// @Tags Health
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Process is alive"
+// @Router /live [get]
 func handleLiveness(w http.ResponseWriter, r *http.Request) {  //проверка жив ли сервер
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(map[string]interface{}{
@@ -473,7 +537,14 @@ func handleLiveness(w http.ResponseWriter, r *http.Request) {  //проверк�
         "uptime_seconds": int64(time.Since(startTime).Seconds()),
     })
 }
-
+// handleReadiness — проверка готовности
+// @Summary Readiness probe
+// @Description Проверяет, готов ли сервер принимать запросы (для Kubernetes)
+// @Tags Health
+// @Produce json
+// @Success 200 {object} map[string]string "Ready to serve"
+// @Failure 503 {object} map[string]string "Not ready"
+// @Router /ready [get]
 func handleReadiness(w http.ResponseWriter, r *http.Request) {  //проверка готов ли сервер принимать запросы
     w.Header().Set("Content-Type", "application/json")
     
@@ -505,6 +576,17 @@ func handleReadiness(w http.ResponseWriter, r *http.Request) {  //проверк
         "status": "ready",
     })
 }
+// @Summary Потоковый ответ на вопрос
+// @Description Отправляет вопрос в RAG и возвращает ответ через Server-Sent Events
+// @Tags Ask
+// @Accept json
+// @Produce text/event-stream
+// @Param request body object true "Запрос с вопросом" example({"query":"Что такое RAG?"})
+// @Success 200 {string} string "Потоковый ответ"
+// @Failure 400 {object} map[string]string "Bad Request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Security BearerAuth
+// @Router /ask/stream [post]
 func handleAskStream(w http.ResponseWriter, r *http.Request) {  // обработчик streaming
     authHeader := r.Header.Get("Authorization")
     if authHeader == "" {
