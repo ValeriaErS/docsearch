@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/ledongthuc/pdf"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,63 +33,34 @@ func NewIndexer(cfg *config.Config, vc vector.VectorStore, userID string) *Index
 	}
 }
 
-func (i *Indexer) loadDocumentPDF(path string) (corpus.Document, error) { // загружаю PDF через ledongthuc/pdf
-	file, reader, err := pdf.Open(path)
-	if err != nil {
-		return corpus.Document{}, fmt.Errorf("ошибка открытия PDF: %w", err)
-	}
-	defer file.Close()
-
-	var fullText strings.Builder
-	pages := make(map[int]string)
-	var pageOffsets []int
-	offset := 0
-
-	for pageNum := 1; pageNum <= reader.NumPage(); pageNum++ { // прохожу по всем страницам
-		page := reader.Page(pageNum)
-		if page.V.IsNull() {
-			continue
-		}
-		content, err := page.GetPlainText(nil)
-		if err != nil {
-			continue
-		}
-		pageOffsets = append(pageOffsets, offset)
-		pages[pageNum] = content
-		fullText.WriteString(content)
-		fullText.WriteString("\n")
-		offset += len(content) + 1
-	}
-
-	doc := corpus.Document{
-		Name:        filepath.Base(path),
-		Text:        fullText.String(),
-		Pages:       pages,
-		PageOffsets: pageOffsets,
-	}
-	return doc, nil
-}
-
 func (i *Indexer) loadDocument(path string) (corpus.Document, error) {
-	ext := strings.ToLower(filepath.Ext(path))
-	var doc corpus.Document
+    ext := strings.ToLower(filepath.Ext(path))
+    
+    if ext == ".pdf" {
+        text, pages, pageOffsets, err := corpus.ReadPDFFile(path)
+        if err != nil {
+            return corpus.Document{}, fmt.Errorf("ошибка чтения PDF %s: %w", path, err)
+        }
+        
+        return corpus.Document{
+            Name:        filepath.Base(path),
+            Text:        text,
+            Pages:       pages,
+            PageOffsets: pageOffsets,
+        }, nil
+    }
 
-	if ext == ".pdf" {
-		return i.loadDocumentPDF(path)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return doc, err
-	}
-
-	doc = corpus.Document{
-		Name:        filepath.Base(path),
-		Text:        string(data),
-		Pages:       make(map[int]string),
-		PageOffsets: []int{},
-	}
-	return doc, nil
+    data, err := os.ReadFile(path)
+    if err != nil {
+        return corpus.Document{}, err
+    }
+    
+    return corpus.Document{
+        Name:        filepath.Base(path),
+        Text:        string(data),
+        Pages:       make(map[int]string),
+        PageOffsets: []int{},
+    }, nil
 }
 
 func (i *Indexer) Index(ctx context.Context) error {
@@ -214,77 +184,92 @@ func (i *Indexer) Index(ctx context.Context) error {
 }
 
 func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
-	if len(strings.TrimSpace(doc.Text)) == 0 {
-		fmt.Printf("Документ %s пуст, пропускаем\n", doc.Name)
-		return nil
-	}
+    if len(strings.TrimSpace(doc.Text)) == 0 {
+        fmt.Printf("Документ %s пуст, пропускаем\n", doc.Name)
+        return nil
+    }
+    chunks := chunk.SplitIntelligent(doc.Text, doc.Name, i.Config.Chunking.MaxTokens, i.Config.Chunking.OverlapTokens) //режу на чанки
 
-	chunks := chunk.SplitIntelligent(doc.Text, doc.Name, i.Config.Chunking.MaxTokens, i.Config.Chunking.OverlapTokens) // режу на чанки
+    fmt.Printf("Документ: %s, страниц: %d, чанков: %d\n", doc.Name, len(doc.Pages), len(chunks))
 
-	fmt.Printf("Документ: %s, страниц: %d\n", doc.Name, len(doc.Pages))
+    var cache *EmbeddingCache //создаю кеш
+    if i.Config.Embeddings.Provider == "local" {
+        cache = NewEmbeddingCache()
+        fmt.Printf("Кеш эмбеддингов создан для документа %s\n", doc.Name)
+    }
 
-	for idx, ch := range chunks {
+    var batch []map[string]interface{}
+    const batchSize = 50
 
-		page := doc.GetPageByPosition(ch.StartPos)
+    for idx, ch := range chunks {
+        page := doc.GetPageByPosition(ch.StartPos)
+        fmt.Printf("Чанк %d: страница %d, позиция %d\n", idx+1, page, ch.StartPos)
 
-		fmt.Printf("Чанк %d: страница %d, позиция %d\n", idx+1, page, ch.StartPos)
+        var vec []float64
+        var err error
 
-		var cache *EmbeddingCache // создаю кеш один раз для всего документа
-		if i.Config.Embeddings.Provider == "local" {
-			cache = NewEmbeddingCache()
-		}
+        if cache != nil {
+            if cached, ok := cache.Get(ch.Text); ok {
+                vec = cached
+                fmt.Printf("Чанк %d: эмбеддинг взят из кеша\n", idx+1)
+            }
+        }
 
-		vec, err := func() ([]float64, error) { // внутри цикла по чанкам проверяю кеш
-			if cache != nil {
-				if cached, ok := cache.Get(ch.Text); ok {
-					fmt.Printf("Чанк %d: эмбеддинг взят из кеша\n", idx+1)
-					return cached, nil
-				}
-			}
+        if vec == nil {
+            vec, err = embed.GetEmbedding(ctx, ch.Text, i.Config)
+            if err != nil {
+                return fmt.Errorf("ошибка эмбеддинга для чанка %d: %w", idx+1, err)
+            }
+    
+            if cache != nil {
+                cache.Save(ch.Text, vec)
+                fmt.Printf("Чанк %d: эмбеддинг сохранен в кеш\n", idx+1)
+            }
+        }
 
-			vec, err := embed.GetEmbedding(ctx, ch.Text, i.Config) // считаю эмбеддинг
-			if err != nil {
-				return nil, err
-			}
+        vec32 := []float32{}
+        for _, v := range vec {
+            vec32 = append(vec32, float32(v))
+        }
 
-			if cache != nil {
-				cache.Save(ch.Text, vec)
-			}
+        id := uuid.New().String()
 
-			return vec, nil
-		}()
+        data := map[string]interface{}{
+            "doc_id":      doc.Name,
+            "chunk_text":  ch.Text,
+            "section":     ch.Section,
+            "level":       ch.Level,
+            "token_count": ch.TokenCount,
+            "user_id":     i.UserID,
+            "page":        page,
+            "chunk_id":    id,
+            "text":        ch.Text,
+        }
 
-		if err != nil {
-			fmt.Println("Ошибка эмбеддинга:", err)
-			return err
-		}
+        batch = append(batch, map[string]interface{}{
+            "id":      id,
+            "vector":  vec32,
+            "payload": data,
+        })
 
-		vec32 := []float32{}
-		for _, v := range vec {
-			vec32 = append(vec32, float32(v))
-		}
-		fmt.Println("Сохраняю чанк, размер вектора:", len(vec32))
+        if len(batch) >= batchSize {
+            fmt.Printf("Отправляю батч из %d точек в Qdrant\n", len(batch))
+            if err := i.VectorClient.SaveBatch(ctx, vector.CollectionName, batch); err != nil {
+                return fmt.Errorf("ошибка сохранения батча: %w", err)
+            }
+            batch = []map[string]interface{}{} 
+        }
+    }
 
-		id := uuid.New().String()
-		data := map[string]interface{}{
-			"doc_id":      doc.Name,
-			"chunk_text":  ch.Text,
-			"section":     ch.Section,
-			"level":       ch.Level,
-			"token_count": ch.TokenCount,
-			"user_id":     i.UserID,
-			"page":        page,
-			"chunk_id":    id,
-			"text":        ch.Text,
-		}
+    if len(batch) > 0 {
+        fmt.Printf("Отправляю остаток из %d точек в Qdrant\n", len(batch))
+        if err := i.VectorClient.SaveBatch(ctx, vector.CollectionName, batch); err != nil {
+            return fmt.Errorf("ошибка сохранения остатка: %w", err)
+        }
+    }
 
-		err = i.VectorClient.Save(ctx, vector.CollectionName, id, vec32, data)
-		if err != nil {
-			fmt.Println("Ошибка сохранения:", err)
-			return err
-		}
-	}
-	return nil
+    fmt.Printf("Документ %s успешно сохранен (%d чанков)\n", doc.Name, len(chunks))
+    return nil
 }
 
 func (i *Indexer) deleteDoc(ctx context.Context, name string) { // удаляю все чанки документа из бд
@@ -304,7 +289,9 @@ func hashText(doc corpus.Document, cfg *config.Config) string { // считаю 
 		cfg.Embeddings.Model + "|" +
 		fmt.Sprintf("%d|", cfg.Embeddings.VectorSize) +
 		cfg.LLM.Model + "|" +
-		fmt.Sprintf("%d", cfg.Retrieval.TopK)
+		fmt.Sprintf("%d|", cfg.Retrieval.CandidateTopK) +  
+        fmt.Sprintf("%d|", cfg.Retrieval.RerankTopK) +    
+        fmt.Sprintf("%d", cfg.Retrieval.FinalTopK)   
 
 	h := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(h[:])

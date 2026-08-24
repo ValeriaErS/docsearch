@@ -20,6 +20,7 @@ type QdrantClient struct {
 	Host       string
 	Port       int
 	VectorSize int
+	httpClient *http.Client
 }
 
 func NewQdrantClient() (*QdrantClient, error) { // создаю нового клиента
@@ -41,7 +42,15 @@ func NewQdrantClient() (*QdrantClient, error) { // создаю нового к�
 	return &QdrantClient{
 		Host: host,
 		Port: port,
-	}, nil
+		httpClient: &http.Client{  
+			Timeout: 60 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+                MaxIdleConnsPerHost: 10,
+                IdleConnTimeout:     90 * time.Second,
+            },
+        },
+    }, nil
 }
 
 func (q *QdrantClient) url(path string) string { //адрес
@@ -428,4 +437,53 @@ func (q *QdrantClient) SearchText(ctx context.Context, name string, query string
 	}
 
 	return out, nil
+}
+
+func (q *QdrantClient) SaveBatch(ctx context.Context, name string, points []map[string]interface{}) error {  // сохраняет несколько векторов за один HTTP запрос
+    if len(points) == 0 {
+        return nil
+    }
+
+    if len(points) <= 5 {
+        for _, p := range points {
+            id, _ := p["id"].(string)
+            vec, _ := p["vector"].([]float32)
+            payload, _ := p["payload"].(map[string]interface{})
+            if err := q.Save(ctx, name, id, vec, payload); err != nil {
+                return err
+            }
+        }
+        return nil
+    }
+
+    fmt.Printf("Отправляю батч из %d точек в Qdrant\n", len(points))
+
+    data := map[string]interface{}{
+        "points": points,
+    }
+
+    jsonData, err := json.Marshal(data)
+    if err != nil {
+        return fmt.Errorf("ошибка маршалинга батча: %w", err)
+    }
+
+    req, err := http.NewRequestWithContext(ctx, "PUT", q.url("/collections/"+name+"/points"), bytes.NewBuffer(jsonData))
+    if err != nil {
+        return fmt.Errorf("ошибка создания запроса: %w", err)
+    }
+    req.Header.Set("Content-Type", "application/json")
+
+    resp, err := q.httpClient.Do(req)
+    if err != nil {
+        return fmt.Errorf("ошибка отправки батча: %w", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != 200 {
+        body, _ := io.ReadAll(resp.Body)
+        return fmt.Errorf("ошибка батча: статус %d, тело: %s", resp.StatusCode, string(body))
+    }
+
+    fmt.Printf("Батч из %d точек успешно отправлен\n", len(points))
+    return nil
 }

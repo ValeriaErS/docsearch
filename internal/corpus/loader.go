@@ -6,36 +6,93 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"docsearch/internal/parser"
 )
 
-func readPDF(path string) (string, map[int]string, []int, error) { // читаю PDF файл и достаю из него текст
-	file, reader, err := pdf.Open(path)
-	if err != nil {
-		return "", nil, nil, err
-	}
-	defer file.Close()
+func readPDF(path string) (string, map[int]string, []int, error) {
+    fmt.Printf("Пробую Docling для %s...\n", path)
+    
+    result, err := parser.ParsePDFDocling(path)
+    if err == nil && result != nil && len(result.Text) > 100 {
+        fmt.Printf("Docling прочитал %d страниц, %d символов\n", result.Pages, len(result.Text))
+        
+        pages := make(map[int]string) //разбиваю текст на стр
+        pageOffsets := []int{}
+        
+        var pageTexts []string
+        if strings.Contains(result.Text, "\f") {
+            pageTexts = strings.Split(result.Text, "\f")
+        } else {
+            pageTexts = strings.Split(result.Text, "\n\n")
+        }
+        
+        offset := 0
+        for i, pageText := range pageTexts {
+            pageNum := i + 1
+            if pageNum > result.Pages && result.Pages > 0 {
+                break
+            }
+            pageText = strings.TrimSpace(pageText)
+            if len(pageText) > 10 {
+                pages[pageNum] = pageText
+                pageOffsets = append(pageOffsets, offset)
+                offset += len(pageText) + 1
+            }
+        }
+        
+        if len(pages) == 0 {
+            pages[1] = result.Text
+            pageOffsets = []int{0}
+        }
+        
+        return result.Text, pages, pageOffsets, nil
+    }
+    
+    if err != nil {
+        fmt.Printf("Docling не сработал: %v, пробую fallback\n", err)
+    } else {
+        fmt.Printf("Docling вернул пустой текст, пробую fallback\n")
+    }
+   
+    fmt.Printf("Пробую старый парсер для %s...\n", path)
+    
+    file, reader, err := pdf.Open(path)
+    if err != nil {
+        return "", nil, nil, fmt.Errorf("не удалось открыть PDF: %w", err)
+    }
+    defer file.Close()
 
-	var fullText strings.Builder
-	pages := make(map[int]string)
-	var pageOffsets []int
-	offset := 0
+    var fullText strings.Builder
+    pages := make(map[int]string)
+    var pageOffsets []int
+    offset := 0
 
-	for i := 1; i <= reader.NumPage(); i++ { // прохожу по всем страницам
-		page := reader.Page(i)
-		if page.V.IsNull() {
-			continue
-		}
-		content, err := page.GetPlainText(nil)
-		if err != nil {
-			continue
-		}
-		pageOffsets = append(pageOffsets, offset) // запоминаю позицию начала страницы в общем тексте
-		pages[i] = content
-		fullText.WriteString(content)
-		fullText.WriteString("\n")
-		offset += len(content) + 1
-	}
-	return fullText.String(), pages, pageOffsets, nil
+    for pageNum := 1; pageNum <= reader.NumPage(); pageNum++ {
+        page := reader.Page(pageNum)
+        if page.V.IsNull() {
+            continue
+        }
+        content, err := page.GetPlainText(nil)
+        if err != nil {
+            continue
+        }
+        content = strings.TrimSpace(content)
+        if len(content) > 0 {
+            pageOffsets = append(pageOffsets, offset)
+            pages[pageNum] = content
+            fullText.WriteString(content)
+            fullText.WriteString("\n")
+            offset += len(content) + 1
+        }
+    }
+
+    finalText := fullText.String()
+    if len(finalText) == 0 {
+        return "", nil, nil, fmt.Errorf("PDF не содержит текста (возможно, это скан)")
+    }
+    
+    fmt.Printf("Старый парсер прочитал %d страниц, %d символов\n", len(pages), len(finalText))
+    return finalText, pages, pageOffsets, nil
 }
 
 func LoadDocuments(path string, formats []string) ([]Document, error) { //formats как параметр
@@ -100,4 +157,7 @@ func LoadDocuments(path string, formats []string) ([]Document, error) { //format
 
 	}
 	return docs, nil
+}
+func ReadPDFFile(path string) (string, map[int]string, []int, error) {
+    return readPDF(path)
 }

@@ -233,3 +233,15 @@ func (f *FakeVectorStore) SearchText(ctx context.Context, name string, query str
 
 	return results, nil
 }
+
+func (f *FakeVectorStore) SaveBatch(ctx context.Context, name string, points []map[string]interface{}) error {  // сохраняет несколько векторов 
+    for _, p := range points {
+        id, _ := p["id"].(string)
+        vec, _ := p["vector"].([]float32)
+        payload, _ := p["payload"].(map[string]interface{})
+        if err := f.Save(ctx, name, id, vec, payload); err != nil {
+            return err
+        }
+    }
+    return nil
+}
