@@ -17,14 +17,14 @@ import (
 	"strings"
 )
 
-type Indexer struct { //структура индексации
+type Indexer struct {
 	Config       *config.Config
 	VectorClient vector.VectorStore
 	IndexPath    string
 	UserID       string
 }
 
-func NewIndexer(cfg *config.Config, vc vector.VectorStore, userID string) *Indexer { //новый индексер
+func NewIndexer(cfg *config.Config, vc vector.VectorStore, userID string) *Indexer {
 	return &Indexer{
 		Config:       cfg,
 		VectorClient: vc,
@@ -34,42 +34,42 @@ func NewIndexer(cfg *config.Config, vc vector.VectorStore, userID string) *Index
 }
 
 func (i *Indexer) loadDocument(path string) (corpus.Document, error) {
-    ext := strings.ToLower(filepath.Ext(path))
-    
-    if ext == ".pdf" {
-        text, pages, pageOffsets, err := corpus.ReadPDFFile(path)
-        if err != nil {
-            return corpus.Document{}, fmt.Errorf("ошибка чтения PDF %s: %w", path, err)
-        }
-        
-        return corpus.Document{
-            Name:        filepath.Base(path),
-            Text:        text,
-            Pages:       pages,
-            PageOffsets: pageOffsets,
-        }, nil
-    }
+	ext := strings.ToLower(filepath.Ext(path))
 
-    data, err := os.ReadFile(path)
-    if err != nil {
-        return corpus.Document{}, err
-    }
-    
-    return corpus.Document{
-        Name:        filepath.Base(path),
-        Text:        string(data),
-        Pages:       make(map[int]string),
-        PageOffsets: []int{},
-    }, nil
+	if ext == ".pdf" {
+		text, pages, pageOffsets, err := corpus.ReadPDFFile(path)
+		if err != nil {
+			return corpus.Document{}, fmt.Errorf("ошибка чтения PDF %s: %w", path, err)
+		}
+		
+		return corpus.Document{
+			Name:        filepath.Base(path),
+			Text:        text,
+			Pages:       pages,
+			PageOffsets: pageOffsets,
+		}, nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return corpus.Document{}, err
+	}
+	
+	return corpus.Document{
+		Name:        filepath.Base(path),
+		Text:        string(data),
+		Pages:       make(map[int]string),
+		PageOffsets: []int{},
+	}, nil
 }
 
 func (i *Indexer) Index(ctx context.Context) error {
-	err := i.VectorClient.CreateCollection(ctx, vector.CollectionName) // создаю коллекцию
+	err := i.VectorClient.CreateCollection(ctx, vector.CollectionName)
 	if err != nil {
 		return fmt.Errorf("ошибка создания коллекции: %w", err)
 	}
 
-	userDocsPath := filepath.Join(i.Config.Corpus.Path, i.UserID) // путь к папке пользователя
+	userDocsPath := filepath.Join(i.Config.Corpus.Path, i.UserID)
 
 	if _, err := os.Stat(userDocsPath); os.IsNotExist(err) {
 		os.MkdirAll(userDocsPath, 0755)
@@ -78,7 +78,7 @@ func (i *Indexer) Index(ctx context.Context) error {
 		return nil
 	}
 
-	files, err := os.ReadDir(userDocsPath) // читаю файлы в папке пользователя
+	files, err := os.ReadDir(userDocsPath)
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (i *Indexer) Index(ctx context.Context) error {
 	if len(docs) == 0 {
 		fmt.Printf("В папке %s нет поддерживаемых документов\n", userDocsPath)
 
-		entries, err := os.ReadDir(userDocsPath) // проверка что в папке есть файлы
+		entries, err := os.ReadDir(userDocsPath)
 		if err != nil {
 			fmt.Println("Не удалось проверить папку:", err)
 		} else if len(entries) == 0 {
@@ -135,14 +135,14 @@ func (i *Indexer) Index(ctx context.Context) error {
 		return nil
 	}
 
-	old := map[string]string{} // читаю старые хеши из файла
+	old := map[string]string{}
 	data, _ := os.ReadFile(i.IndexPath)
 	json.Unmarshal(data, &old)
 
 	for _, doc := range docs {
 		hash := hashText(doc, i.Config)
 
-		if old[doc.Name] != hash { // если хеш изменился или документа не было индексирую
+		if old[doc.Name] != hash {
 			fmt.Println("Индексирую:", doc.Name)
 			i.deleteDoc(ctx, doc.Name)
 
@@ -158,7 +158,7 @@ func (i *Indexer) Index(ctx context.Context) error {
 		}
 	}
 
-	for name := range old { // проверка не удалила ли какие-то документы
+	for name := range old {
 		found := false
 		for _, doc := range docs {
 			if doc.Name == name {
@@ -184,95 +184,96 @@ func (i *Indexer) Index(ctx context.Context) error {
 }
 
 func (i *Indexer) saveDoc(ctx context.Context, doc corpus.Document) error {
-    if len(strings.TrimSpace(doc.Text)) == 0 {
-        fmt.Printf("Документ %s пуст, пропускаем\n", doc.Name)
-        return nil
-    }
-    chunks := chunk.SplitIntelligent(doc.Text, doc.Name, i.Config.Chunking.MaxTokens, i.Config.Chunking.OverlapTokens) //режу на чанки
+	if len(strings.TrimSpace(doc.Text)) == 0 {
+		fmt.Printf("Документ %s пуст, пропускаем\n", doc.Name)
+		return nil
+	}
 
-    fmt.Printf("Документ: %s, страниц: %d, чанков: %d\n", doc.Name, len(doc.Pages), len(chunks))
+	chunks := chunk.SplitIntelligent(doc.Text, doc.Name, i.Config.Chunking.MaxTokens, i.Config.Chunking.OverlapTokens)
 
-    var cache *EmbeddingCache //создаю кеш
-    if i.Config.Embeddings.Provider == "local" {
-        cache = NewEmbeddingCache()
-        fmt.Printf("Кеш эмбеддингов создан для документа %s\n", doc.Name)
-    }
+	fmt.Printf("Документ: %s, страниц: %d, чанков: %d\n", doc.Name, len(doc.Pages), len(chunks))
 
-    var batch []map[string]interface{}
-    const batchSize = 50
+	var cache *EmbeddingCache
+	if i.Config.Embeddings.Provider == "local" {
+		cache = NewEmbeddingCache()
+		fmt.Printf("Кеш эмбеддингов создан для документа %s\n", doc.Name)
+	}
 
-    for idx, ch := range chunks {
-        page := doc.GetPageByPosition(ch.StartPos)
-        fmt.Printf("Чанк %d: страница %d, позиция %d\n", idx+1, page, ch.StartPos)
+	var batch []map[string]interface{}
+	const batchSize = 50
 
-        var vec []float64
-        var err error
+	for idx, ch := range chunks {
+		page := doc.GetPageByPosition(ch.StartPos)
+		fmt.Printf("Чанк %d: страница %d, позиция %d\n", idx+1, page, ch.StartPos)
 
-        if cache != nil {
-            if cached, ok := cache.Get(ch.Text); ok {
-                vec = cached
-                fmt.Printf("Чанк %d: эмбеддинг взят из кеша\n", idx+1)
-            }
-        }
+		var vec []float64
+		var err error
 
-        if vec == nil {
-            vec, err = embed.GetEmbedding(ctx, ch.Text, i.Config)
-            if err != nil {
-                return fmt.Errorf("ошибка эмбеддинга для чанка %d: %w", idx+1, err)
-            }
-    
-            if cache != nil {
-                cache.Save(ch.Text, vec)
-                fmt.Printf("Чанк %d: эмбеддинг сохранен в кеш\n", idx+1)
-            }
-        }
+		if cache != nil {
+			if cached, ok := cache.Get(ch.Text); ok {
+				vec = cached
+				fmt.Printf("Чанк %d: эмбеддинг взят из кеша\n", idx+1)
+			}
+		}
 
-        vec32 := []float32{}
-        for _, v := range vec {
-            vec32 = append(vec32, float32(v))
-        }
+		if vec == nil {
+			vec, err = embed.GetEmbedding(ctx, ch.Text, i.Config)
+			if err != nil {
+				return fmt.Errorf("ошибка эмбеддинга для чанка %d: %w", idx+1, err)
+			}
 
-        id := uuid.New().String()
+			if cache != nil {
+				cache.Save(ch.Text, vec)
+				fmt.Printf("Чанк %d: эмбеддинг сохранен в кеш\n", idx+1)
+			}
+		}
 
-        data := map[string]interface{}{
-            "doc_id":      doc.Name,
-            "chunk_text":  ch.Text,
-            "section":     ch.Section,
-            "level":       ch.Level,
-            "token_count": ch.TokenCount,
-            "user_id":     i.UserID,
-            "page":        page,
-            "chunk_id":    id,
-            "text":        ch.Text,
-        }
+		vec32 := []float32{}
+		for _, v := range vec {
+			vec32 = append(vec32, float32(v))
+		}
 
-        batch = append(batch, map[string]interface{}{
-            "id":      id,
-            "vector":  vec32,
-            "payload": data,
-        })
+		id := uuid.New().String()
 
-        if len(batch) >= batchSize {
-            fmt.Printf("Отправляю батч из %d точек в Qdrant\n", len(batch))
-            if err := i.VectorClient.SaveBatch(ctx, vector.CollectionName, batch); err != nil {
-                return fmt.Errorf("ошибка сохранения батча: %w", err)
-            }
-            batch = []map[string]interface{}{} 
-        }
-    }
+		data := map[string]interface{}{
+			"doc_id":      doc.Name,
+			"chunk_text":  ch.Text,
+			"section":     ch.Section,
+			"level":       ch.Level,
+			"token_count": ch.TokenCount,
+			"user_id":     i.UserID,
+			"page":        page,
+			"chunk_id":    id,
+			"text":        ch.Text,
+		}
 
-    if len(batch) > 0 {
-        fmt.Printf("Отправляю остаток из %d точек в Qdrant\n", len(batch))
-        if err := i.VectorClient.SaveBatch(ctx, vector.CollectionName, batch); err != nil {
-            return fmt.Errorf("ошибка сохранения остатка: %w", err)
-        }
-    }
+		batch = append(batch, map[string]interface{}{
+			"id":      id,
+			"vector":  vec32,
+			"payload": data,
+		})
 
-    fmt.Printf("Документ %s успешно сохранен (%d чанков)\n", doc.Name, len(chunks))
-    return nil
+		if len(batch) >= batchSize {
+			fmt.Printf("Отправляю батч из %d точек в Qdrant\n", len(batch))
+			if err := i.VectorClient.SaveBatch(ctx, vector.CollectionName, batch); err != nil {
+				return fmt.Errorf("ошибка сохранения батча: %w", err)
+			}
+			batch = []map[string]interface{}{}
+		}
+	}
+
+	if len(batch) > 0 {
+		fmt.Printf("Отправляю остаток из %d точек в Qdrant\n", len(batch))
+		if err := i.VectorClient.SaveBatch(ctx, vector.CollectionName, batch); err != nil {
+			return fmt.Errorf("ошибка сохранения остатка: %w", err)
+		}
+	}
+
+	fmt.Printf("Документ %s успешно сохранен (%d чанков)\n", doc.Name, len(chunks))
+	return nil
 }
 
-func (i *Indexer) deleteDoc(ctx context.Context, name string) { // удаляю все чанки документа из бд
+func (i *Indexer) deleteDoc(ctx context.Context, name string) {
 	filter := map[string]interface{}{
 		"must": []map[string]interface{}{
 			{"key": "doc_id", "match": map[string]interface{}{"value": name}},
@@ -282,16 +283,16 @@ func (i *Indexer) deleteDoc(ctx context.Context, name string) { // удаляю 
 	i.VectorClient.Delete(ctx, vector.CollectionName, filter)
 }
 
-func hashText(doc corpus.Document, cfg *config.Config) string { // считаю хеш текста
-	data := doc.Text + //текст с настройками
+func hashText(doc corpus.Document, cfg *config.Config) string {
+	data := doc.Text +
 		fmt.Sprintf("|%d|", cfg.Chunking.MaxTokens) +
 		fmt.Sprintf("%d|", cfg.Chunking.OverlapTokens) +
 		cfg.Embeddings.Model + "|" +
 		fmt.Sprintf("%d|", cfg.Embeddings.VectorSize) +
 		cfg.LLM.Model + "|" +
-		fmt.Sprintf("%d|", cfg.Retrieval.CandidateTopK) +  
-        fmt.Sprintf("%d|", cfg.Retrieval.RerankTopK) +    
-        fmt.Sprintf("%d", cfg.Retrieval.FinalTopK)   
+		fmt.Sprintf("%d|", cfg.Retrieval.CandidateTopK) +
+		fmt.Sprintf("%d|", cfg.Retrieval.RerankTopK) +
+		fmt.Sprintf("%d", cfg.Retrieval.FinalTopK)
 
 	h := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(h[:])

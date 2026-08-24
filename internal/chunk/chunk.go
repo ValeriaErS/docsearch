@@ -5,10 +5,10 @@ type Chunk struct {
 	Document string
 }
 
-func SplitText(text string, size int, overlap int, docName string) []Chunk { //Разбиваем текст на куски
+func SplitText(text string, size int, overlap int, docName string) []Chunk {
 	var result []Chunk
 
-	if text == "" { //если пустой,меньше 0 текст-на выход
+	if text == "" {
 		return result
 	}
 	if size <= 0 {
@@ -23,7 +23,7 @@ func SplitText(text string, size int, overlap int, docName string) []Chunk { //�
 	for start < len(text) {
 		end := start + size
 
-		if end > len(text) { //обрезка при выходе за границу
+		if end > len(text) {
 			end = len(text)
 		}
 		part := text[start:end]
@@ -33,7 +33,6 @@ func SplitText(text string, size int, overlap int, docName string) []Chunk { //�
 		if start >= len(text) {
 			break
 		}
-
 	}
 	return result
 }
