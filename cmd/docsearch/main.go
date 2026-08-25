@@ -143,6 +143,7 @@ func printHelp() {
 	fmt.Println("index --user имя  Индексация документов")
 	fmt.Println("eval --user имя  Оценка качества")
 	fmt.Println("compare --user имя  Сравнение ANN и точного поиска")
+	fmt.Println("benchmark --user имя  Запуск бенчмарка (оценка качества поиска)")
 	fmt.Println("demo  Демонстрационный режим")
 	fmt.Println("--version Версия программы")
 	fmt.Println("analyze Анализ логов пайплайна")
@@ -174,6 +175,8 @@ func main() {
 		demoCmd()
 	case "analyze":
 		analyzeCmd()
+	case "benchmark": 
+        benchmarkCmd() 
 	case "--version", "-v":
 		fmt.Println("DocSearch version 1.0.0")
 	default:
@@ -521,6 +524,42 @@ func createVectorClient(cfg *config.Config) (vector.VectorStore, error) {
 	}
 	client.VectorSize = cfg.Embeddings.VectorSize
 	return client, nil
+}
+func benchmarkCmd() {
+    benchmarkFlag := flag.NewFlagSet("benchmark", flag.ExitOnError)
+    userID := benchmarkFlag.String("user", "", "Имя пользователя")
+    configFile := benchmarkFlag.String("config", "configs/config.yml", "Путь к конфигу")
 
-	
+    benchmarkFlag.Parse(os.Args[2:])
+
+    if *userID == "" {
+        fmt.Println("Ошибка: требуется --user")
+        benchmarkFlag.Usage()
+        os.Exit(2)
+    }
+
+    cfg, err := config.LoadConfig(*configFile)
+    if err != nil {
+        fmt.Println("Ошибка загрузки конфига:", err)
+        return
+    }
+
+    safeUser, err := safety.SanitizeAndValidateUser(*userID)
+    if err != nil {
+        fmt.Println("Ошибка: неверное имя пользователя:", err)
+        return
+    }
+
+    vectorClient, err := createVectorClient(cfg)
+    if err != nil {
+        fmt.Println("Ошибка подключения к векторной БД:", err)
+        return
+    }
+
+    if err := eval.RunBenchmark(cfg, safeUser, vectorClient); err != nil {
+        fmt.Println("Ошибка бенчмарка:", err)
+        return
+    }
+
+    fmt.Println("Бенчмарк завершен")
 }

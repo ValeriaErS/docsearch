@@ -1,5 +1,6 @@
-{"query": "Что такое RAG?", "expected_docs": ["doc1.md"]}
-{"query": "Как установить DocSearch?", "expected_docs": ["doc2.md"]}
-{"query": "Что такое эмбеддинги?", "expected_docs": ["doc1.md"]}
-{"query": "Как работает Qdrant?", "expected_docs": ["doc3.md"]}
-{"query": "Что такое FileAuditor?", "expected_docs": ["fileauditor_description.pdf"]}
+{"query":"Что такое RAG?","expected_docs":["doc1.md"]}
+{"query":"Что такое эмбеддинги?","expected_docs":["doc2.md"]}
+{"query":"Как работает Qdrant?","expected_docs":["doc3.md"]}
+{"query":"Что такое FileAuditor?","expected_docs":["doc4.md"]}
+{"query":"Что такое FileAuditor?","expected_docs":["doc4.md"]}
+{"query":"Какие возможности у системы КИБ?","expected_docs":["admin_manual.pdf"]}
