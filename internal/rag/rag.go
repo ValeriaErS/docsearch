@@ -142,16 +142,14 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 	var embedDuration float64
 	var searchDuration float64
 
-	// ===== НОВЫЙ RETRIEVAL PIPELINE =====
-// Теперь мы используем CandidateTopK, RerankTopK, FinalTopK
 
 if fromCache {
     embedDuration = 0
     searchDuration = 0
     fmt.Printf("Использую кэшированные результаты (%d документов)\n", len(results))
 } else {
-    // ШАГ 1: Получаем эмбеддинг запроса (это было, оставляем)
-    startEmbed := time.Now()
+
+    startEmbed := time.Now() //получаю эмбеддинг
     vec, err := embed.GetEmbedding(ctx, queryForSearch, &cfg)
     if err != nil {
         return []string{}, []string{}, []float64{}, "не могу понять ваш вопрос", []int{}, []string{}, 0, map[string]float64{}
@@ -164,8 +162,7 @@ if fromCache {
         vec32 = append(vec32, float32(vec[i]))
     }
 
-    // Проверяем подключение к Qdrant
-    if vectorClient == nil {
+    if vectorClient == nil {   // проверка подключение к бд
         var err error
         vectorClient, err = vector.NewQdrantClient()
         if err != nil {

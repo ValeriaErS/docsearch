@@ -446,7 +446,6 @@ func (q *QdrantClient) SearchText(ctx context.Context, name string, query string
 }
 
 func (q *QdrantClient) ensureTextIndex(ctx context.Context, collectionName string) error {
-    // Проверяем существование индекса
     req, err := http.NewRequestWithContext(ctx, "GET", q.url("/collections/"+collectionName+"/index"), nil)
     if err != nil {
         return err

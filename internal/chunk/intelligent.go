@@ -105,7 +105,6 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 		overlapTokens = maxTokens / 4
 	}
 
-	// КОРОТКИЙ ДОКУМЕНТ → один чанк со ВСЕМ текстом
 	if len([]rune(text)) < 3000 {
 		return []IntelligentChunk{
 			{
@@ -143,8 +142,7 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 	globalPos := 0
 
 	for _, section := range sections {
-		// разбиваем по точкам, вопросительным и восклицательным знакам
-		sentences := splitIntoSentences(section.Content)
+		sentences := splitIntoSentences(section.Content) //разбиваю по знакам 
 
 		var current string
 		var currentStartPos int
@@ -167,8 +165,7 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 
 			tokenCount := len(enc.Encode(s, nil, nil))
 
-			// Проверяем, что предложение не слишком маленькое (фильтруем мусор)
-			if tokenCount < 2 && len(strings.TrimSpace(s)) < 3 {
+			if tokenCount < 2 && len(strings.TrimSpace(s)) < 3 {  // проверка что предл. не слишком маленькие
 				globalPos = sentPos + len(s)
 				continue
 			}
@@ -264,7 +261,6 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 		}
 	}
 
-	// Если чанков нет или они слишком маленькие - используем простое разбиение
 	totalLen := 0
 	for _, ch := range chunks {
 		totalLen += len(ch.Text)
@@ -277,19 +273,15 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 	return chunks
 }
 
-// разбивает текст на предложения
-func splitIntoSentences(text string) []string {
+func splitIntoSentences(text string) []string { // разбиваю текст на предложения
 	var result []string
 	var current strings.Builder
 
 	for _, r := range text {
 		current.WriteRune(r)
-		// Проверяем конец предложения: . ! ?
 		if r == '.' || r == '!' || r == '?' {
-			// Проверяем, что это не часть числа (например, 1. или 2.)
 			str := current.String()
 			trimmed := strings.TrimSpace(str)
-			// Если предложение длинное или содержит буквы - сохраняем
 			if len(trimmed) > 3 && strings.ContainsAny(trimmed, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZабвгдеёжзийклмнопрстуфхцчшщъыьэюя") {
 				result = append(result, trimmed)
 				current.Reset()
@@ -297,7 +289,6 @@ func splitIntoSentences(text string) []string {
 		}
 	}
 
-	// Добавляем остаток
 	if current.Len() > 0 {
 		trimmed := strings.TrimSpace(current.String())
 		if len(trimmed) > 3 {
@@ -332,23 +323,20 @@ func truncateToTokens(text string, maxTokens int, enc *tiktoken.Tiktoken) string
 	return result.String()
 }
 
-// splitBySize - простое разбиение текста на чанки по размеру (в символах)
-// Используется как fallback для больших документов без структуры
+// простое разбиение текста на чанки по размеру (в символах)
 func splitBySize(text string, docName string, maxTokens int, overlapTokens int) []IntelligentChunk {
 	if len(text) == 0 {
 		return nil
 	}
 
 	if len(text) > 100000 {
-		fmt.Printf("⚠️ splitBySize: текст слишком большой (%d байт), пропускаю обработку\n", len(text))
+		fmt.Printf("splitBySize: текст слишком большой (%d байт), пропускаю обработку\n", len(text))
 		return nil
 	}
 
-	// Оцениваем размер чанка в символах (примерно 4 символа на токен)
 	maxChars := maxTokens * 4
 	overlapChars := overlapTokens * 4
 
-	// Если текст короткий - один чанк
 	if len(text) <= maxChars {
 		return []IntelligentChunk{
 			{
@@ -374,7 +362,6 @@ func splitBySize(text string, docName string, maxTokens int, overlapTokens int) 
 			end = len(text)
 		}
 
-		// Ищем конец предложения или абзаца в пределах 500 символов
 		cutPos := end
 		searchStart := end - 500
 		if searchStart < start {

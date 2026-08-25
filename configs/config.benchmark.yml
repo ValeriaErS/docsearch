@@ -7,7 +7,7 @@ chunking:
   overlap_tokens: 64
 
 embeddings:
-  provider: "local"          # тот же, что при index; если index был local
+  provider: "local"         
   model: "text-embedding-nomic-embed-text-v1.5"
   base_url: "http://127.0.0.1:1234"
   vector_size: 768
@@ -30,7 +30,7 @@ hybrid_weights:
   text: 1.0
 
 llm:
-  provider: "mock"           # ← никаких OpenRouter
+  provider: "mock"          
   model: "mock"
   base_url: ""
   temperature: 0.1

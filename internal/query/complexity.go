@@ -80,8 +80,8 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
             CandidateTopK:  20,
             RerankTopK:     5,
             FinalTopK:      3,
-            UseHybrid:      true,   // ← ВКЛЮЧАЕМ
-            UseRerank:      true,   // ← ВКЛЮЧАЕМ
+            UseHybrid:      true,   
+            UseRerank:      true,   
             UseRewriting:   false,
             UseMultiQuery:  false,
             Description:    "простой поиск",
