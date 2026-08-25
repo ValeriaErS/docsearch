@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"bytes"
+	"io"
 )
 
 func (q *QdrantClient) EnsureTextIndex(ctx context.Context, collectionName string) error {  //создает текстовый индекс для поля text
@@ -47,40 +48,44 @@ func (q *QdrantClient) textIndexExists(ctx context.Context, collectionName strin
 }
 
 func (q *QdrantClient) createTextIndex(ctx context.Context, collectionName string) error {
-	fmt.Printf("Создаю текстовый индекс для коллекции %s...\n", collectionName)
+    fmt.Printf("Создаю текстовый индекс для поля 'text' в коллекции %s...\n", collectionName)
 
 	indexConfig := map[string]interface{}{
-		"field_name": "text", 
-		"field_type": "text",
-	}
+        "field_name":  "text",
+        "field_type":  "text",
+        "tokenizer":   "word",     
+        "min_token_len": 2,
+        "max_token_len": 20,
+    }
 
 	jsonData, err := json.Marshal(indexConfig)
-	if err != nil {
-		return fmt.Errorf("ошибка маршалинга: %w", err)
-	}
+    if err != nil {
+        return fmt.Errorf("ошибка маршалинга: %w", err)
+    }
 
-	url := q.url("/collections/" + collectionName + "/index")
-	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
+    url := q.url("/collections/" + collectionName + "/index")
+    req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonData))
+    if err != nil {
+        return err
+    }
+    req.Header.Set("Content-Type", "application/json")
 
-	resp, err := retryRequest(req, 3)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+    resp, err := retryRequest(req, 3)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
 
 	if resp.StatusCode == 200 || resp.StatusCode == 201 {
-		fmt.Printf("Текстовый индекс создан\n")
-		return nil
-	}
+        fmt.Printf("Текстовый индекс создан\n")
+        return nil
+    }
 
-	if resp.StatusCode == 409 {
-		fmt.Printf("Индекс уже существует\n")
-		return nil
-	}
+    if resp.StatusCode == 409 {
+        fmt.Printf("Индекс уже существует\n")
+        return nil
+    }
 
-	return fmt.Errorf("ошибка создания индекса: статус %d", resp.StatusCode)
+    body, _ := io.ReadAll(resp.Body)
+    return fmt.Errorf("ошибка создания индекса: статус %d, тело: %s", resp.StatusCode, string(body))
 }

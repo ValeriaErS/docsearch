@@ -372,38 +372,40 @@ func (q *QdrantClient) GetAllVectors(ctx context.Context, name string, userID st
 	return allPoints, nil
 }
 
-func (q *QdrantClient) SearchText(ctx context.Context, name string, query string, limit int, userID string) ([]map[string]interface{}, error) { //  выполняет полнотекстовый поиск по полю text
+func (q *QdrantClient) SearchText(ctx context.Context, name string, query string, limit int, userID string) ([]map[string]interface{}, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	_ = q.ensureTextIndex(ctx, name)
 
-	if err := q.EnsureTextIndex(ctx, name); err != nil {
-		fmt.Printf("Ошибка создания текстового индекса: %v\n", err)
-		return []map[string]interface{}{}, nil
+	if userID == "" {
+		userID = "default"
 	}
 
-	searchRequest := map[string]interface{}{
+	body := map[string]interface{}{
+		"limit":        limit,
+		"with_payload": true,
 		"filter": map[string]interface{}{
 			"must": []map[string]interface{}{
 				{
-					"key": "user_id",
-					"match": map[string]interface{}{
-						"value": userID,
-					},
+					"key":   "user_id",
+					"match": map[string]interface{}{"value": userID},
+				},
+				{
+					"key":   "text",
+					"match": map[string]interface{}{"text": query},
 				},
 			},
 		},
-		"limit":        limit,
-		"with_payload": true,
-		"search": map[string]interface{}{
-			"field": "text",
-			"query": query,
-		},
 	}
 
-	jsonData, err := json.Marshal(searchRequest)
+	jsonData, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка маршалинга: %w", err)
+		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", q.url("/collections/"+name+"/points/search"), bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST",
+		q.url("/collections/"+name+"/points/scroll"), bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, err
 	}
@@ -415,28 +417,91 @@ func (q *QdrantClient) SearchText(ctx context.Context, name string, query string
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Result []struct {
-			Id      string                 `json:"id"`
-			Score   float64                `json:"score"`
-			Payload map[string]interface{} `json:"payload"`
-		} `json:"result"`
+	if resp.StatusCode != 200 {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("SearchText status %d: %s", resp.StatusCode, string(b))
 	}
 
+	var result struct {
+		Result struct {
+			Points []struct {
+				Id      string                 `json:"id"`
+				Payload map[string]interface{} `json:"payload"`
+			} `json:"points"`
+		} `json:"result"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
 
-	out := []map[string]interface{}{}
-	for _, item := range result.Result {
+	out := make([]map[string]interface{}, 0, len(result.Result.Points))
+	for i, p := range result.Result.Points {
 		out = append(out, map[string]interface{}{
-			"id":      item.Id,
-			"score":   item.Score,
-			"payload": item.Payload,
+			"id":      p.Id,
+			"score":   1.0 / float64(i+1), // для RRF важен порядок
+			"payload": p.Payload,
 		})
 	}
-
 	return out, nil
+}
+
+func (q *QdrantClient) ensureTextIndex(ctx context.Context, collectionName string) error {
+    // Проверяем существование индекса
+    req, err := http.NewRequestWithContext(ctx, "GET", q.url("/collections/"+collectionName+"/index"), nil)
+    if err != nil {
+        return err
+    }
+
+    resp, err := q.httpClient.Do(req)
+    if err == nil && resp.StatusCode == 200 {
+        resp.Body.Close()
+        return nil
+    }
+    if resp != nil {
+        resp.Body.Close()
+    }
+
+    
+    indexConfig := map[string]interface{}{
+	"field_name": "text",
+	"field_schema": map[string]interface{}{
+		"type":          "text",
+		"tokenizer":     "word",
+		"min_token_len": 2,
+		"max_token_len": 40,
+		"lowercase":     true,
+	},
+}
+
+    jsonData, err := json.Marshal(indexConfig)
+    if err != nil {
+        return fmt.Errorf("ошибка маршалинга индекса: %w", err)
+    }
+
+    req, err = http.NewRequestWithContext(ctx, "PUT", q.url("/collections/"+collectionName+"/index"), bytes.NewBuffer(jsonData))
+    if err != nil {
+        return err
+    }
+    req.Header.Set("Content-Type", "application/json")
+
+    resp, err = q.httpClient.Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode == 200 || resp.StatusCode == 201 {
+        fmt.Printf("Текстовый индекс создан\n")
+        return nil
+    }
+
+    if resp.StatusCode == 409 {
+        fmt.Printf("Индекс уже существует\n")
+        return nil
+    }
+
+    body, _ := io.ReadAll(resp.Body)
+    return fmt.Errorf("ошибка создания индекса: статус %d, тело: %s", resp.StatusCode, string(body))
 }
 
 func (q *QdrantClient) SaveBatch(ctx context.Context, name string, points []map[string]interface{}) error {  // сохраняет несколько векторов за один HTTP запрос
