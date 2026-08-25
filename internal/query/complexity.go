@@ -73,51 +73,51 @@ type RetrievalStrategy struct {  //  стратегия поиска
 	UseMultiQuery bool
 	Description   string
 }
-func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {  //  возвращает стратегию для уровня сложности
-	switch complexity {
-	case ComplexitySimple:
-		return RetrievalStrategy{
-			CandidateTopK:  20, 
-            RerankTopK:     5,  
+func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
+    switch complexity {
+    case ComplexitySimple:
+        return RetrievalStrategy{
+            CandidateTopK:  20,
+            RerankTopK:     5,
             FinalTopK:      3,
-			UseRewriting:  false,
-			UseHybrid:     false,
-			UseRerank:     false,
-			UseMultiQuery: false,
-			Description:   "простой поиск",
-		}
-	case ComplexityMedium:
-		return RetrievalStrategy{
-			CandidateTopK:  50,  
-            RerankTopK:     10, 
-            FinalTopK:      5,  
-			UseRewriting:  true,
-			UseHybrid:     true,
-			UseRerank:     true,
-			UseMultiQuery: false,
-			Description:   "гибридный поиск с реранкингом",
-		}
-	case ComplexityComplex:
-		return RetrievalStrategy{
-			CandidateTopK:  100, 
-            RerankTopK:     15,  
-            FinalTopK:      8,  
-			UseRewriting:  true,
-			UseHybrid:     true,
-			UseRerank:     true,
-			UseMultiQuery: false,
-			Description:   "полный пайплайн (без multi-query)",
-		}
-	default:
-		return RetrievalStrategy{
-			CandidateTopK:  50,
+            UseHybrid:      true,   // ← ВКЛЮЧАЕМ
+            UseRerank:      true,   // ← ВКЛЮЧАЕМ
+            UseRewriting:   false,
+            UseMultiQuery:  false,
+            Description:    "простой поиск",
+        }
+    case ComplexityMedium:
+        return RetrievalStrategy{
+            CandidateTopK:  50,
             RerankTopK:     10,
             FinalTopK:      5,
-			UseRewriting:  true,
-			UseHybrid:     true,
-			UseRerank:     true,
-			UseMultiQuery: false,
-			Description:   "стандартный поиск",
-		}
-	}
+            UseHybrid:      true,
+            UseRerank:      true,
+            UseRewriting:   true,
+            UseMultiQuery:  false,
+            Description:    "гибридный поиск с реранкингом",
+        }
+    case ComplexityComplex:
+        return RetrievalStrategy{
+            CandidateTopK:  100,
+            RerankTopK:     15,
+            FinalTopK:      8,
+            UseHybrid:      true,
+            UseRerank:      true,
+            UseRewriting:   true,
+            UseMultiQuery:  false,
+            Description:    "полный пайплайн",
+        }
+    default:
+        return RetrievalStrategy{
+            CandidateTopK:  50,
+            RerankTopK:     10,
+            FinalTopK:      5,
+            UseHybrid:      true,
+            UseRerank:      true,
+            UseRewriting:   true,
+            UseMultiQuery:  false,
+            Description:    "стандартный поиск",
+        }
+    }
 }
