@@ -227,70 +227,111 @@ if fromCache {
             fmt.Printf("Multi-Query: объединено %d результатов\n", len(results))
         }
     }
+	vectorResults := results
 
     textResults := []map[string]interface{}{} //текстовый и векторный поиск
     if cfg.Retrieval.HybridSearch {
-        fmt.Printf("Запускаю полнотекстовый поиск (тоже с запасом %d)\n", candidateK)
-        
-        if qdrantClient, ok := vectorClient.(*vector.QdrantClient); ok {
-            textResults, _ = qdrantClient.SearchText(ctx, vector.CollectionName, queryForSearch, candidateK, userID)
-        } else if fakeClient, ok := vectorClient.(*vector.FakeVectorStore); ok {
-            textResults, _ = fakeClient.SearchText(ctx, vector.CollectionName, queryForSearch, candidateK, userID)
+    fmt.Printf("Текстовый поиск (BM25): ищу %d кандидатов\n", candidateK)
+    
+    if qdrantClient, ok := vectorClient.(*vector.QdrantClient); ok {
+        textResults, err = qdrantClient.SearchText(ctx, vector.CollectionName, queryForSearch, candidateK, userID)
+        if err != nil {
+            fmt.Printf("Ошибка текстового поиска: %v\n", err)
         }
-
-        if len(textResults) > 0 {
-            fmt.Printf("Найдено %d результатов через полнотекстовый поиск\n", len(textResults))
+    } else if fakeClient, ok := vectorClient.(*vector.FakeVectorStore); ok {
+        textResults, err = fakeClient.SearchText(ctx, vector.CollectionName, queryForSearch, candidateK, userID)
+        if err != nil {
+            fmt.Printf("Ошибка текстового поиска: %v\n", err)
         }
     }
-
+    fmt.Printf("Текстовый поиск: найдено %d результатов\n", len(textResults))
+}
+  
     if len(textResults) > 0 && cfg.Retrieval.HybridSearch {
-        fusedResults := retrieve.ReciprocalRankFusion(results, textResults)
-        fmt.Printf("Объединено %d векторных + %d текстовых → %d результатов\n",
-            len(results), len(textResults), len(fusedResults))
-        results = fusedResults
-    }
+    fmt.Printf("Объединяю через Weighted RRF\n")
     
-    rerankK := strategy.RerankTopK
-    if rerankK <= 0 {
-        rerankK = 10 
-    }
+   vectorWeight := cfg.Retrieval.HybridWeights.Vector
+textWeight := cfg.Retrieval.HybridWeights.Text
+if vectorWeight <= 0 {
+    vectorWeight = 1.0
+}
+if textWeight <= 0 {
+    textWeight = 1.0
+}
     
-    beforeRerank := len(results)
-    rerankStart := time.Now()
+    fmt.Printf("Веса: Vector=%.1f, Text=%.1f\n", vectorWeight, textWeight)
+    
+    results = retrieve.WeightedReciprocalRankFusion(
+        []float64{vectorWeight, textWeight},
+        vectorResults,
+        textResults,
+    )
+    
+    if len(results) > candidateK {
+        results = results[:candidateK]
+    }
+    fmt.Printf("После RRF: %d результатов\n", len(results))
+}
 
-    if cfg.Retrieval.EnableRerank && len(results) > rerankK {
-        fmt.Printf("Запускаю реранкинг: %d → %d\n", len(results), rerankK)
-        
-        documents := []string{}
-        for _, r := range results {
-            payload, ok := r["payload"].(map[string]interface{})
-            if !ok {
-                continue
-            }
-            chunkText, ok := payload["chunk_text"].(string)
-            if ok && chunkText != "" {
-                documents = append(documents, chunkText)
-            }
+rerankK := strategy.RerankTopK
+if rerankK <= 0 {
+    rerankK = 10
+}
+
+beforeRerank := len(results)
+rerankStart := time.Now()
+
+
+    if cfg.Retrieval.EnableRerank && len(results) > 1 {
+    fmt.Printf("Запускаю реранкинг: %d → %d\n", len(results), rerankK)
+    
+    type docWithIndex struct {
+        text  string
+        index int
+    }
+    docsWithIdx := []docWithIndex{}
+    
+    for i, r := range results {
+        payload, ok := r["payload"].(map[string]interface{})
+        if !ok {
+            continue
         }
+        chunkText, ok := payload["chunk_text"].(string)
+        if ok && chunkText != "" {
+            docsWithIdx = append(docsWithIdx, docWithIndex{
+                text:  chunkText,
+                index: i,
+            })
+        }
+    }
 
-        if len(documents) > 0 {
-            reranker := rerank.NewReranker(&cfg)
-            indices, _, err := reranker.Rerank(ctx, queryForSearch, documents, rerankK)
-            
-            if err == nil && len(indices) > 0 {
-                rerankedResults := []map[string]interface{}{}
-                for _, idx := range indices {
-                    if idx < len(results) {
-                        rerankedResults = append(rerankedResults, results[idx])
+    if len(docsWithIdx) > 0 {
+        documents := make([]string, len(docsWithIdx)) //извлекаю только тексты для реранкинга
+        for i, d := range docsWithIdx {
+            documents[i] = d.text
+        }
+        
+        reranker := rerank.NewReranker(&cfg)
+        indices, _, err := reranker.Rerank(ctx, queryForSearch, documents, rerankK)
+        
+        if err == nil && len(indices) > 0 {
+            rerankedResults := []map[string]interface{}{}
+            for _, idx := range indices {
+                if idx < len(docsWithIdx) {
+                  
+                    originalIdx := docsWithIdx[idx].index //беру исходный рез по индексу
+                    if originalIdx < len(results) {
+                        rerankedResults = append(rerankedResults, results[originalIdx])
                     }
                 }
-                if len(rerankedResults) > 0 {
-                    results = rerankedResults
-                    fmt.Printf("Реренкинг завершен: осталось %d документов\n", len(results))
-                }
+            }
+            if len(rerankedResults) > 0 {
+                results = rerankedResults
+                fmt.Printf("Реренкинг завершен: осталось %d документов\n", len(results))
             }
         }
     }
+}
     pipelineLog.Rerank = &logger.RerankLog{  //логирую реранкинг
         BeforeCount: beforeRerank,
         AfterCount:  len(results),
@@ -313,36 +354,6 @@ if fromCache {
     }
 }
 
-	found := false //фильтрация по порогу
-	for _, r := range results {
-		score, ok := r["score"].(float64)
-		if !ok {
-			continue
-		}
-		if score >= cfg.Retrieval.MinScore {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return []string{}, []string{}, []float64{}, "ничего не нашла (ниже порога)", []int{}, []string{}, 0, map[string]float64{}
-	}
-
-	filteredResults := []map[string]interface{}{}
-	for _, r := range results {
-		score, ok := r["score"].(float64)
-		if !ok {
-			continue
-		}
-		if score >= cfg.Retrieval.MinScore {
-			filteredResults = append(filteredResults, r)
-		}
-	}
-
-	if len(filteredResults) == 0 {
-		return []string{}, []string{}, []float64{}, "В документации нет информации по этому вопросу", []int{}, []string{}, 0, map[string]float64{}
-	}
-	results = filteredResults
 
 	if cfg.Retrieval.EnableRelevanceCheck && len(results) > 0 {
 		fmt.Printf("Проверяю релевантность контекста...\n")
