@@ -1,6 +1,7 @@
 package chunk
 
 import (
+	"fmt"
 	"github.com/pkoukk/tiktoken-go"
 	"strings"
 )
@@ -95,22 +96,55 @@ type IntelligentChunk struct { // один чанк
 }
 
 func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens int) []IntelligentChunk {
-	if overlapTokens >= maxTokens { //если перекрытие слишком большое уменьшаю его
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+
+	if overlapTokens >= maxTokens {
 		overlapTokens = maxTokens / 4
+	}
+
+	// КОРОТКИЙ ДОКУМЕНТ → один чанк со ВСЕМ текстом
+	if len([]rune(text)) < 3000 {
+		return []IntelligentChunk{
+			{
+				Text:        text,
+				Document:    docName,
+				Section:     "full",
+				Level:       0,
+				Index:       0,
+				TokenCount:  len(strings.Fields(text)),
+				OverlapFrom: -1,
+				StartPos:    0,
+			},
+		}
 	}
 
 	enc, err := tiktoken.GetEncoding("cl100k_base")
 	if err != nil {
-		return []IntelligentChunk{} // нет энкодер, то пустой результат
+		return []IntelligentChunk{
+			{
+				Text:        text,
+				Document:    docName,
+				Section:     "full",
+				Level:       0,
+				Index:       0,
+				TokenCount:  len(strings.Fields(text)),
+				OverlapFrom: -1,
+				StartPos:    0,
+			},
+		}
 	}
 
 	var chunks []IntelligentChunk
 	sections := parseSections(text)
 	chunkIndex := 0
-	globalPos := 0 //позиция в общем тексте
+	globalPos := 0
 
 	for _, section := range sections {
-		sentences := strings.Split(section.Content, ". ")
+		// разбиваем по точкам, вопросительным и восклицательным знакам
+		sentences := splitIntoSentences(section.Content)
 
 		var current string
 		var currentStartPos int
@@ -121,9 +155,6 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 
 		for i := 0; i < len(sentences); i++ {
 			s := sentences[i]
-			if i < len(sentences)-1 {
-				s = s + "."
-			}
 			sentPos := strings.Index(text[globalPos:], s)
 			if sentPos == -1 {
 				sentPos = strings.Index(text, s)
@@ -136,16 +167,21 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 
 			tokenCount := len(enc.Encode(s, nil, nil))
 
-			if currentTokens+tokenCount <= maxTokens { // влезет ли предложение в текущий чанк
+			// Проверяем, что предложение не слишком маленькое (фильтруем мусор)
+			if tokenCount < 2 && len(strings.TrimSpace(s)) < 3 {
+				globalPos = sentPos + len(s)
+				continue
+			}
+
+			if currentTokens+tokenCount <= maxTokens {
 				if current != "" {
-					current = current + " " + s // добавляю предложение к текущему чанку
+					current = current + " " + s
 				} else {
-					current = s // первое предложение в чанке
+					current = s
 					currentStartPos = sentPos
 				}
 				currentTokens = currentTokens + tokenCount
 			} else {
-
 				if current != "" {
 					chunks = append(chunks, IntelligentChunk{
 						Text:        current,
@@ -154,7 +190,7 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 						Level:       section.Level,
 						Index:       chunkIndex,
 						TokenCount:  currentTokens,
-						OverlapFrom: -1, //нет перекрытия
+						OverlapFrom: -1,
 						StartPos:    currentStartPos,
 					})
 					chunkIndex++
@@ -165,13 +201,10 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 				overlapTokensCount = 0
 
 				if overlapTokens > 0 && current != "" {
-					prevSentences := strings.Split(current, ". ")
+					prevSentences := splitIntoSentences(current)
 
-					for j := len(prevSentences) - 1; j >= 0; j-- { //с конца собираю
+					for j := len(prevSentences) - 1; j >= 0; j-- {
 						s2 := prevSentences[j]
-						if j < len(prevSentences)-1 {
-							s2 = s2 + "."
-						}
 						tCount := len(enc.Encode(s2, nil, nil))
 						if overlapTokensCount+tCount <= overlapTokens {
 							if overlapBuffer != "" {
@@ -189,6 +222,7 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 						}
 					}
 				}
+
 				if overlapBuffer != "" {
 					if overlapTokensCount+tokenCount > maxTokens {
 						overlapTokensCount = maxTokens - tokenCount
@@ -211,12 +245,11 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 					currentStartPos = sentPos
 					currentTokens = tokenCount
 				}
-
 			}
 			globalPos = sentPos + len(s)
 		}
 
-		if current != "" {
+		if current != "" && len(current) > 10 {
 			chunks = append(chunks, IntelligentChunk{
 				Text:        current,
 				Document:    docName,
@@ -230,18 +263,60 @@ func SplitIntelligent(text string, docName string, maxTokens int, overlapTokens 
 			chunkIndex++
 		}
 	}
+
+	// Если чанков нет или они слишком маленькие - используем простое разбиение
+	totalLen := 0
+	for _, ch := range chunks {
+		totalLen += len(ch.Text)
+	}
+
+	if len(chunks) == 0 || totalLen < len(text)/2 || len(chunks) < 5 {
+		return splitBySize(text, docName, maxTokens, overlapTokens)
+	}
+
 	return chunks
+}
+
+// разбивает текст на предложения
+func splitIntoSentences(text string) []string {
+	var result []string
+	var current strings.Builder
+
+	for _, r := range text {
+		current.WriteRune(r)
+		// Проверяем конец предложения: . ! ?
+		if r == '.' || r == '!' || r == '?' {
+			// Проверяем, что это не часть числа (например, 1. или 2.)
+			str := current.String()
+			trimmed := strings.TrimSpace(str)
+			// Если предложение длинное или содержит буквы - сохраняем
+			if len(trimmed) > 3 && strings.ContainsAny(trimmed, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZабвгдеёжзийклмнопрстуфхцчшщъыьэюя") {
+				result = append(result, trimmed)
+				current.Reset()
+			}
+		}
+	}
+
+	// Добавляем остаток
+	if current.Len() > 0 {
+		trimmed := strings.TrimSpace(current.String())
+		if len(trimmed) > 3 {
+			result = append(result, trimmed)
+		}
+	}
+
+	return result
 }
 
 func truncateToTokens(text string, maxTokens int, enc *tiktoken.Tiktoken) string {
 	if text == "" || maxTokens <= 0 {
 		return ""
 	}
-	
+
 	words := strings.Fields(text)
 	var result strings.Builder
 	tokens := 0
-	
+
 	for _, word := range words {
 		wordTokens := len(enc.Encode(word, nil, nil))
 		if tokens+wordTokens > maxTokens {
@@ -253,6 +328,111 @@ func truncateToTokens(text string, maxTokens int, enc *tiktoken.Tiktoken) string
 		result.WriteString(word)
 		tokens += wordTokens
 	}
-	
+
 	return result.String()
+}
+
+// splitBySize - простое разбиение текста на чанки по размеру (в символах)
+// Используется как fallback для больших документов без структуры
+func splitBySize(text string, docName string, maxTokens int, overlapTokens int) []IntelligentChunk {
+	if len(text) == 0 {
+		return nil
+	}
+
+	if len(text) > 100000 {
+		fmt.Printf("⚠️ splitBySize: текст слишком большой (%d байт), пропускаю обработку\n", len(text))
+		return nil
+	}
+
+	// Оцениваем размер чанка в символах (примерно 4 символа на токен)
+	maxChars := maxTokens * 4
+	overlapChars := overlapTokens * 4
+
+	// Если текст короткий - один чанк
+	if len(text) <= maxChars {
+		return []IntelligentChunk{
+			{
+				Text:        text,
+				Document:    docName,
+				Section:     "full",
+				Level:       0,
+				Index:       0,
+				TokenCount:  len(strings.Fields(text)),
+				OverlapFrom: -1,
+				StartPos:    0,
+			},
+		}
+	}
+
+	var chunks []IntelligentChunk
+	start := 0
+	chunkIndex := 0
+
+	for start < len(text) {
+		end := start + maxChars
+		if end > len(text) {
+			end = len(text)
+		}
+
+		// Ищем конец предложения или абзаца в пределах 500 символов
+		cutPos := end
+		searchStart := end - 500
+		if searchStart < start {
+			searchStart = start
+		}
+
+		for i := end - 1; i >= searchStart; i-- {
+			if text[i] == '.' || text[i] == '?' || text[i] == '!' || text[i] == '\n' {
+				if i > 0 && text[i-1] >= '0' && text[i-1] <= '9' {
+					continue
+				}
+				cutPos = i + 1
+				break
+			}
+		}
+
+		if cutPos == end || cutPos <= start {
+			for i := end - 1; i >= searchStart; i-- {
+				if text[i] == ' ' || text[i] == '\t' || text[i] == '\n' {
+					cutPos = i + 1
+					break
+				}
+			}
+		}
+
+		if cutPos <= start || cutPos > len(text) {
+			cutPos = end
+			if cutPos > len(text) {
+				cutPos = len(text)
+			}
+		}
+
+		chunkText := text[start:cutPos]
+		if len(chunkText) > 20 {
+			chunks = append(chunks, IntelligentChunk{
+				Text:        chunkText,
+				Document:    docName,
+				Section:     fmt.Sprintf("part_%d", chunkIndex+1),
+				Level:       0,
+				Index:       chunkIndex,
+				TokenCount:  len(strings.Fields(chunkText)),
+				OverlapFrom: -1,
+				StartPos:    start,
+			})
+			chunkIndex++
+		}
+
+		start = cutPos - overlapChars
+		if start < 0 {
+			start = 0
+		}
+		if start >= len(text) {
+			break
+		}
+		if start == cutPos {
+			start = cutPos + 1
+		}
+	}
+
+	return chunks
 }
