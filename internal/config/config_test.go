@@ -29,8 +29,8 @@ func TestLoadConfig(t *testing.T) {
 		t.Error("Размер вектора не загружен")
 	}
 
-	if cfg.Retrieval.TopK == 0 {
-		t.Error("TopK не загружен")
+	if cfg.Retrieval.CandidateTopK == 0 {
+        t.Error("CandidateTopK не загружен")
 	}
 
 	t.Log("Конфиг загружен из файла")
