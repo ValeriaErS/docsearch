@@ -105,7 +105,7 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
             UseHybrid:      true,
             UseRerank:      true,
             UseRewriting:   true,
-            UseMultiQuery:  false,
+            UseMultiQuery:  true,
             Description:    "полный пайплайн",
         }
     default:
