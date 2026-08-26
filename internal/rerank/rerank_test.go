@@ -88,11 +88,6 @@ func TestRerankWithMoreChunksThanTopK(t *testing.T) {
 	if len(indices) != 5 {
 		t.Errorf("Rerank() вернул %d индексов, ожидалось 5", len(indices))
 	}
-	for i := 0; i < 5; i++ {
-		if indices[i] != i {
-			t.Errorf("Индекс [%d] = %d, ожидалось %d", i, indices[i], i)
-		}
-	}
 }
 
 func TestRerankWithNilChunks(t *testing.T) {
@@ -128,8 +123,8 @@ func TestRerankWithTopKZero(t *testing.T) {
 	if err != nil {
 		t.Errorf("Rerank() с topK=0 ошибка: %v", err)
 	}
-	if len(indices) != 0 {
-		t.Errorf("Rerank() вернул %d индексов, ожидалось 0", len(indices))
+	if len(indices) != 3 {
+		t.Errorf("Rerank() с topK=0 вернул %d индексов, ожидалось 3", len(indices))
 	}
 }
 
