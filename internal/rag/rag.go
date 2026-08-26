@@ -20,7 +20,7 @@ import (
 	//"docsearch/internal/metrics"
 	"docsearch/internal/alert"   
     "os" 
-	"strings"
+	
 )
 var redisCache *cache.RedisCache
 
@@ -572,6 +572,7 @@ rerankStart := time.Now()
 		"search": searchDuration,
 		"llm":    llmDuration,
 	}
+	/*
 	if redisCache != nil && len(texts) > 0 && answer != "" {
     hasInfo := !strings.Contains(answer, "нет информации") && 
                !strings.Contains(answer, "не найдено") &&
@@ -593,7 +594,7 @@ rerankStart := time.Now()
     } else {
         fmt.Println("Ответ не содержит информации, пропускаем кеширование")
     }
-}
+}*/
 	/*metrics.RequestDuration.WithLabelValues("ask").Observe(time.Since(startTotal).Seconds())
 metrics.RetrievedChunks.Observe(float64(len(texts)))
 metrics.TokensUsed.Observe(float64(tokensUsed))
