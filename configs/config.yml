@@ -17,11 +17,11 @@ retrieval:
     rerank_top_k: 10
     final_top_k: 5
     min_score: 0.0
-    enable_rewriting: false
-    enable_hyde: false
+    enable_rewriting: true
+    enable_hyde: true
     hybrid_search: true 
     enable_rerank: true
-    enable_multi_query: false
+    enable_multi_query: true
     enable_compression: false
     enable_relevance_check: false
 
@@ -30,15 +30,15 @@ hybrid_weights:
     text: 1.0         
 
 llm:
-    provider: "mock"
-    model: "mock"
-    base_url: ""
+    provider: "openrouter"
+    model: "openrouter/free"
+    base_url: "https://openrouter.ai/api/v1"
     temperature: 0.1
     max_tokens: 2048
 
 cache:
-    enable_embedding_cache: true
-    enable_search_cache: true
+    enable_embedding_cache: false
+    enable_search_cache: false
     ttl_hours: 24
 
 validation:
