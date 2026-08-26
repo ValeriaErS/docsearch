@@ -17,7 +17,6 @@ import (
 	"docsearch/internal/monitor"
 	"docsearch/internal/logger"
 	"docsearch/internal/agent"
-	"docsearch/internal/cache"
 	 _ "docsearch/docs" 
 	
 )
@@ -328,69 +327,38 @@ func askCmd() {
 }
 
 func serveCmd() {
-	serveFlag := flag.NewFlagSet("serve", flag.ExitOnError)
-	addr := serveFlag.String("addr", ":8080", "Адрес для сервера")
-	configFile := serveFlag.String("config", "configs/config.yml", "Путь к конфигу")
+    serveFlag := flag.NewFlagSet("serve", flag.ExitOnError)
+    addr := serveFlag.String("addr", ":8080", "Адрес для сервера")
+    configFile := serveFlag.String("config", "configs/config.yml", "Путь к конфигу")
 
-	metricsFlag := serveFlag.Bool("metrics", false, "Показать метрики и выйти")
+    metricsFlag := serveFlag.Bool("metrics", false, "Показать метрики и выйти")
 
-	serveFlag.Parse(os.Args[2:])
+    serveFlag.Parse(os.Args[2:])
 
-	cfg, err := config.LoadConfig(*configFile)
-	if err != nil {
-		fmt.Println("Ошибка загрузки конфига:", err)
-		return
-	}
-
-	 redisAddr := os.Getenv("REDIS_ADDR")
-    if redisAddr == "" {
-        redisAddr = "localhost:6379"
+    cfg, err := config.LoadConfig(*configFile)
+    if err != nil {
+        fmt.Println("Ошибка загрузки конфига:", err)
+        return
     }
 
-    redisCache := cache.NewRedisCache(redisAddr, "", 0, 24*time.Hour)
-    cache.SetRedisCache(redisCache)
-    rag.InitRedisCache(redisAddr, 24*time.Hour)
-
-    ctx := context.Background()
-    if err := redisCache.Ping(ctx); err != nil {
-        fmt.Println("Redis не доступен, используется файловый кеш")
-    } else {
-        fmt.Println("Redis кеш инициализирован")
-    }
-   
-
-	if *metricsFlag {
-		collector := monitor.GetCollector()
-		collector.ExportSummary()
-	
-	if err := collector.GenerateCharts("metrics"); err != nil {
-			fmt.Printf("Ошибка генерации графиков: %v\n", err)
-		}
-		fmt.Println("\n Открой metrics/dashboard.html для просмотра графиков")
-		return
-	}
-	redisAddr = os.Getenv("REDIS_ADDR")
-    if redisAddr == "" {
-        redisAddr = "localhost:6379"
-    }
-	redisCache = cache.NewRedisCache(redisAddr, "", 0, 7*24*time.Hour)
-    cache.SetRedisCache(redisCache)
-    rag.InitRedisCache(redisAddr, 7*24*time.Hour)
-
-    ctx = context.Background()
-    if err := redisCache.Ping(ctx); err != nil {
-        fmt.Println("Redis не доступен, используется файловый кеш")
-    } else {
-        fmt.Println("Redis кеш инициализирован")
+    if *metricsFlag {
+        collector := monitor.GetCollector()
+        collector.ExportSummary()
+        if err := collector.GenerateCharts("metrics"); err != nil {
+            fmt.Printf("Ошибка генерации графиков: %v\n", err)
+        }
+        fmt.Println("\n Открой metrics/dashboard.html для просмотра графиков")
+        return
     }
 
-	vectorClient, err := createVectorClient(cfg)
-	if err != nil {
-		fmt.Println("Ошибка подключения к векторной БД:", err)
-		return
-	}
 
-	server.RunWeb(cfg, *addr, vectorClient)
+    vectorClient, err := createVectorClient(cfg)
+    if err != nil {
+        fmt.Println("Ошибка подключения к векторной БД:", err)
+        return
+    }
+
+    server.RunWeb(cfg, *addr, vectorClient)
 }
 
 func indexCmd() {
