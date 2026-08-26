@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	llmTimeout = 100 * time.Second // ждем ответ 30 секунд
+	llmTimeout = 100 * time.Second   // ждем ответ 30 секунд
 	maxRetries = 2
 )
 
@@ -39,7 +39,7 @@ func GetAnswerWithHistory(ctx context.Context, question string, chunks []string,
 			docName = docNames[i]
 		}
 
-		page := 1 // беру реальную страницу
+		page := 1  // беру реальную страницу
 		if i < len(pages) && pages[i] > 0 {
 			page = pages[i]
 		}
@@ -80,7 +80,7 @@ func GetAnswerWithHistory(ctx context.Context, question string, chunks []string,
 		"content": systemPrompt,
 	})
 
-	start := 0 // добавляю историю
+	start := 0  // добавляю историю
 	if len(history) > 4 {
 		start = len(history) - 4
 	}
@@ -100,22 +100,22 @@ func GetAnswerWithHistory(ctx context.Context, question string, chunks []string,
 		return "", 0, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", 0, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("HTTP-Referer", "http://localhost")
-	req.Header.Set("X-Title", "docsearch")
-
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
 			fmt.Printf("Повторная попытка %d из %d\n", attempt+1, maxRetries)
 			time.Sleep(time.Duration(attempt) * time.Second)
 		}
+
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("HTTP-Referer", "http://localhost")
+		req.Header.Set("X-Title", "docsearch")
 
 		client := &http.Client{Timeout: llmTimeout}
 		resp, err := client.Do(req)
@@ -159,7 +159,6 @@ func GetAnswerWithHistory(ctx context.Context, question string, chunks []string,
 		}
 
 		answer := result.Choices[0].Message.Content
-		
 
 		answer = strings.ReplaceAll(answer, "**", "")
 		answer = strings.ReplaceAll(answer, "*", "")
