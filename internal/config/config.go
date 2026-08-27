@@ -76,6 +76,10 @@ type Config struct {
 		Temperature float64 `yaml:"temperature"`
 		MaxTokens   int     `yaml:"max_tokens"`
 	} `yaml:"llm"`
+	
+	Agent struct {
+        EnableIntentClassification bool `yaml:"enable_intent_classification"`
+    } `yaml:"agent"`
 }
 
 func LoadConfig(path string) (*Config, error) { //читает файл config.yml

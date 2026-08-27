@@ -57,3 +57,6 @@ rate_limit:
     enabled: true
     requests_per_minute: 30
 
+agent:
+    enable_intent_classification: true
+
