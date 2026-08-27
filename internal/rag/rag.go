@@ -21,6 +21,7 @@ import (
 	"docsearch/internal/alert"   
     "os" 
 	
+	
 )
 var redisCache *cache.RedisCache
 
@@ -67,6 +68,12 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		logger.GetPipelineLogger().Save(pipelineLog)
 		return []string{}, []string{}, []float64{}, validation.Reason, []int{}, []string{}, 0, map[string]float64{}
 	}
+	intentResult := query.ClassifyIntent(ctx, question, &cfg)
+	
+	if intentResult.IsDirect() {
+    answer := "Привет! 😊 Я помогаю искать информацию в документации. Задайте вопрос, и я найду ответ среди загруженных документов."
+    return []string{}, []string{}, []float64{}, answer, []int{}, []string{}, 0, map[string]float64{}
+}
 
 	complexity := query.ClassifyComplexity(question) // определяю сложность запроса и выбираю стратегию
 	strategy := query.GetRetrievalStrategy(complexity)
