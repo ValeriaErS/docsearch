@@ -648,32 +648,38 @@
     }
 
     function stopSearch() {
-        if (abortController) {
-            abortController.abort();
-            abortController = null;
-        }
-        isProcessing = false;
-        
-        const stopBtn = document.getElementById('stopBtn');
-        if (stopBtn) stopBtn.remove();
-
-        btn.style.display = 'inline-block';
-        btn.disabled = false;
-        btn.textContent = 'Отправить';
-        input.disabled = false;
-        input.placeholder = 'Напиши свой вопрос...';
-        input.focus();
-
-        const waits = chat.querySelectorAll('.msg.bot');
-        for (const w of waits) {
-            if (w.textContent.includes('Ищу ответ')) {
-                w.remove();
-            }
-        }
-
-        addMessage('Поиск остановлен пользователем.', false);
-        console.log("Поиск остановлен");
+    if (abortController) {
+        abortController.abort();
+        abortController = null;
     }
+    isProcessing = false;
+    
+    const stopBtn = document.getElementById('stopBtn');
+    if (stopBtn) stopBtn.remove();
+
+    btn.style.display = 'inline-block';
+    btn.disabled = false;
+    btn.textContent = 'Отправить';
+    input.disabled = false;
+    input.placeholder = 'Напиши свой вопрос...';
+    input.focus();
+
+    const waits = chat.querySelectorAll('.msg.bot');
+    for (const w of waits) {
+        if (w.textContent.includes('Ищу...') || w.textContent.includes('Ищу ответ')) {
+            w.remove();
+        }
+    }
+
+    const msg = document.createElement('div');
+    msg.className = 'msg bot';
+    msg.textContent = 'Поиск прерван. Можете задать новый вопрос.';
+    msg.style.opacity = '0.7';
+    chat.appendChild(msg);
+    chat.scrollTop = chat.scrollHeight;
+
+    console.log("Поиск остановлен");
+}
 
     function sendQuestion() {
         if (isProcessing) {
