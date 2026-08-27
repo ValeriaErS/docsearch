@@ -42,6 +42,9 @@ type Config struct {
 		EnableMultiQuery bool    `yaml:"enable_multi_query"`
 		EnableCompression bool    `yaml:"enable_compression"`
 		EnableRelevanceCheck bool   `yaml:"enable_relevance_check"`
+		EnableMMR        bool    `yaml:"enable_mmr"`
+		MMRLambda        float64 `yaml:"mmr_lambda"`
+		MMRFetchK        int     `yaml:"mmr_fetch_k"`
 
 		HybridWeights struct {
             Vector float64 `yaml:"vector"`

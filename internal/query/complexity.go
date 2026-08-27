@@ -63,16 +63,18 @@ func ClassifyComplexity(query string) Complexity {   //  определяет с
 
 	return ComplexityMedium
 }
-type RetrievalStrategy struct {  //  стратегия поиска
-	CandidateTopK  int    
-    RerankTopK     int    
-    FinalTopK      int  
-	UseRewriting  bool
-	UseHybrid     bool
-	UseRerank     bool
-	UseMultiQuery bool
-	Description   string
+type RetrievalStrategy struct { //стратегия поиска
+    CandidateTopK  int
+    RerankTopK     int
+    FinalTopK      int
+    UseRewriting   bool
+    UseHybrid      bool
+    UseRerank      bool
+    UseMultiQuery  bool
+    UseMMR         bool
+    Description    string
 }
+
 func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
     switch complexity {
     case ComplexitySimple:
@@ -80,10 +82,11 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
             CandidateTopK:  20,
             RerankTopK:     5,
             FinalTopK:      3,
-            UseHybrid:      true,   
-            UseRerank:      true,   
             UseRewriting:   false,
+            UseHybrid:      false,
+            UseRerank:      false,
             UseMultiQuery:  false,
+            UseMMR:         true,
             Description:    "простой поиск",
         }
     case ComplexityMedium:
@@ -91,10 +94,11 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
             CandidateTopK:  50,
             RerankTopK:     10,
             FinalTopK:      5,
+            UseRewriting:   true,
             UseHybrid:      true,
             UseRerank:      true,
-            UseRewriting:   true,
             UseMultiQuery:  false,
+            UseMMR:         true,
             Description:    "гибридный поиск с реранкингом",
         }
     case ComplexityComplex:
@@ -102,10 +106,11 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
             CandidateTopK:  100,
             RerankTopK:     15,
             FinalTopK:      8,
+            UseRewriting:   true,
             UseHybrid:      true,
             UseRerank:      true,
-            UseRewriting:   true,
             UseMultiQuery:  true,
+            UseMMR:         true,
             Description:    "полный пайплайн",
         }
     default:
@@ -113,10 +118,11 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
             CandidateTopK:  50,
             RerankTopK:     10,
             FinalTopK:      5,
+            UseRewriting:   true,
             UseHybrid:      true,
             UseRerank:      true,
-            UseRewriting:   true,
             UseMultiQuery:  false,
+            UseMMR:         true,
             Description:    "стандартный поиск",
         }
     }

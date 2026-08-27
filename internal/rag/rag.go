@@ -269,6 +269,25 @@ if textWeight <= 0 {
     }
     fmt.Printf("После RRF: %d результатов\n", len(results))
 }
+    if cfg.Retrieval.EnableMMR && len(results) > 0 { //mmr
+        fetchK := strategy.FinalTopK * 5
+        if fetchK > len(results) {
+            fetchK = len(results)
+        }
+        if fetchK > 50 {
+            fetchK = 50 // огранич для скорости
+        }
+
+        mmrTopK := strategy.FinalTopK * 2
+        if mmrTopK > len(results) {
+            mmrTopK = len(results)
+        }
+
+        if mmrTopK > 0 && len(results) > mmrTopK {
+            results = retrieve.MMRSelect(results, cfg.Retrieval.MMRLambda, mmrTopK, fetchK)
+            fmt.Printf("MMR: оставлено %d разнообразных чанков (λ=%.2f)\n", len(results), cfg.Retrieval.MMRLambda)
+        }
+    }
 
 rerankK := strategy.RerankTopK
 if rerankK <= 0 {

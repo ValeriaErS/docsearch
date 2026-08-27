@@ -24,6 +24,9 @@ retrieval:
     enable_multi_query: false
     enable_compression: false
     enable_relevance_check: false
+    enable_mmr: true
+    mmr_lambda: 0.5
+    mmr_fetch_k: 25
 
 hybrid_weights:
     vector: 1.0
