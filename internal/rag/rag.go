@@ -20,6 +20,7 @@ import (
 	//"docsearch/internal/metrics"
 	"docsearch/internal/alert"   
     "os" 
+	"strings"
 	
 	
 )
@@ -33,6 +34,12 @@ var errorAlertSent = false
 func Ask(ctx context.Context, cfg config.Config, question string, userID string, history []map[string]string, vectorClient vector.VectorStore) ([]string, []string, []float64, string, []int, []string, int, map[string]float64) {
 	//metrics.ActiveRequests.Inc()
    // defer metrics.ActiveRequests.Dec()
+   fmt.Println("[rag.Ask] начало")
+    fmt.Printf("Вопрос: %s\n", question)
+    fmt.Printf("Пользователь: %s\n", userID)
+
+	fmt.Println("=== трансформация запроса ===")
+	fmt.Printf("1. исходный запрос пользователя: '%s'\n", question)
 
 	startTotal := time.Now()
 
@@ -69,14 +76,17 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		return []string{}, []string{}, []float64{}, validation.Reason, []int{}, []string{}, 0, map[string]float64{}
 	}
 	intentResult := query.ClassifyIntent(ctx, question, &cfg)
+	fmt.Printf("2. классификация намерения: %s (причина: %s)\n", intentResult.Intent, intentResult.Reason)
 	
 	if intentResult.IsDirect() {
-    answer := "Привет! 😊 Я помогаю искать информацию в документации. Задайте вопрос, и я найду ответ среди загруженных документов."
+    answer := "Привет! Я помогаю искать информацию в документации. Задайте вопрос, и я найду ответ среди загруженных документов."
     return []string{}, []string{}, []float64{}, answer, []int{}, []string{}, 0, map[string]float64{}
 }
 
 	complexity := query.ClassifyComplexity(question) // определяю сложность запроса и выбираю стратегию
 	strategy := query.GetRetrievalStrategy(complexity)
+	fmt.Printf("3. сложность запроса: %s\n", complexity)
+	fmt.Printf("4. стратегия поиска: %s\n", strategy.Description)
 
 	fmt.Printf("[%s] complexity=%s strategy=%q CandidateTopK=%d FinalTopK=%d rw=%v hyb=%v rr=%v mq=%v\n",
     requestID, complexity, strategy.Description,
@@ -104,6 +114,55 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 	monitorMetrics.SetRetrievalRounds(1)
 
 	queryForSearch := question
+	fmt.Println("\n" + strings.Repeat("=", 60))
+    fmt.Println("Запрос пользователя от а до я")
+    fmt.Println(strings.Repeat("=", 60))
+    fmt.Printf("1. Исходный запрос пользователя:\n   \"%s\"\n", question)
+   
+    fmt.Println("\n2. Валидация и отчистка:")
+    if len(question) < 3 {
+        fmt.Println("Запрос слишком короткий")
+    } else if len(question) > 2000 {
+        fmt.Println("Запрос слишком длинный")
+    } else {
+        fmt.Println("Длина: допустимая")
+        fmt.Println("Спецсимволы: нет")
+        fmt.Println("Мусор: нет")
+        fmt.Println("Результат: запрос чистый")
+    }
+  
+    fmt.Println("\n3. INTENT CLASSIFICATION:")
+    fmt.Printf("Намерение: %s\n", intentResult.Intent)
+    fmt.Printf("Причина: %s\n", intentResult.Reason)
+   
+    if cfg.Retrieval.EnableRewriting {
+        fmt.Println("\n4. QUERY REWRITING (перефразирование):")
+        fmt.Printf("Было: \"%s\"\n", question)
+        fmt.Printf("Стало: \"%s\"\n", queryForSearch)
+    }
+    
+    if cfg.Retrieval.EnableHyDE && queryForSearch != question {
+        fmt.Println("\n5. HYDE (Гипотетический ответ):")
+        fmt.Printf("%s\n", queryForSearch)
+    }
+    
+    fmt.Println("\n6. Финальный запрос QDRANT:")
+    fmt.Printf(" → \"%s\"\n", queryForSearch)
+    
+  
+    words := strings.Fields(queryForSearch)
+    if len(words) > 0 {
+        fmt.Println("\n7. Ключевые слова для поиска:")
+        for i, word := range words {
+            if i < 10 {
+                fmt.Printf("   • %s\n", word)
+            }
+        }
+        if len(words) > 10 {
+            fmt.Printf("   ... и еще %d слов\n", len(words)-10)
+        }
+    }
+    fmt.Println(strings.Repeat("=", 60))
 	//var multiQueryResults []map[string]interface{}
 	rewriter := query.NewQueryRewriter(&cfg)
 
@@ -114,7 +173,7 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		hypothetical, err := rewriter.GenerateHyDE(ctx, question)
 		if err == nil && len(hypothetical) > 20 {
 			queryForSearch = hypothetical
-			fmt.Printf("HyDE сгенерирован (длина: %d символов)\n", len(hypothetical))
+			fmt.Printf("5. hyde генерация: '%s' → '%s'\n", question, hypothetical)
 		} else if err != nil {
 			fmt.Printf("HyDE ошибка: %v, используем оригинал\n", err)
 		}
@@ -124,14 +183,14 @@ func Ask(ctx context.Context, cfg config.Config, question string, userID string,
 		rewritten, err := rewriter.Rewrite(ctx, question, history)
 		if err == nil && len(rewritten) > 5 && rewritten != question {
 			queryForSearch = rewritten
-			fmt.Printf("Запрос переписан: '%s' → '%s'\n", question, rewritten)
+			fmt.Printf("6. переписывание запроса: '%s' → '%s'\n", question, rewritten)
 		} else if err != nil {
 			fmt.Printf("Rewriting ошибка: %v\n", err)
 		}
 	}
 
 	if queryForSearch != question { //финальный запрос
-		fmt.Printf("Поиск по запросу: '%s'\n", queryForSearch)
+		fmt.Printf("9. финальный запрос в qdrant: '%s'\n", queryForSearch)
 	}
 
 	var fromCache bool  //проверка кэша поиска
@@ -155,6 +214,8 @@ if fromCache {
     searchDuration = 0
     fmt.Printf("Использую кэшированные результаты (%d документов)\n", len(results))
 } else {
+
+	fmt.Println("=== начало поиска ===")
 
     startEmbed := time.Now() //получаю эмбеддинг
     vec, err := embed.GetEmbedding(ctx, queryForSearch, &cfg)
@@ -194,6 +255,55 @@ if fromCache {
     searchDuration = time.Since(startSearch).Seconds()
     monitorMetrics.SetChunksFound(len(results))
     monitorMetrics.SetSearchDuration(time.Since(startSearch))
+
+	if cfg.Retrieval.EnableDecomposition && strategy.UseDecomposition {
+        if query.ShouldDecompose(queryForSearch) {
+            fmt.Printf("8. декомпозиция запроса: '%s'\n", queryForSearch)
+            
+            decompResult := query.DecomposeQuery(ctx, queryForSearch, &cfg)
+            
+            if decompResult.IsComplex && len(decompResult.SubQueries) > 1 {
+                fmt.Printf("   разбит на %d подвопросов:\n", len(decompResult.SubQueries))
+                for i, sq := range decompResult.SubQueries {
+                    fmt.Printf("   %d. '%s'\n", i+1, sq)
+                }
+                
+                var allResults []map[string]interface{}
+                
+                for _, subQuery := range decompResult.SubQueries {
+                    subVec, err := embed.GetEmbedding(ctx, subQuery, &cfg)
+                    if err != nil {
+                        fmt.Printf("Ошибка эмбеддинга для подзапроса '%s': %v\n", subQuery, err)
+                        continue
+                    }
+                    
+                    subVec32 := []float32{}
+                    for _, v := range subVec {
+                        subVec32 = append(subVec32, float32(v))
+                    }
+                    
+                    subResults, err := vectorClient.Search(ctx, vector.CollectionName, subVec32, candidateK/2, userID)
+                    if err != nil {
+                        fmt.Printf("Ошибка поиска для подзапроса '%s': %v\n", subQuery, err)
+                        continue
+                    }
+                    
+                    allResults = append(allResults, subResults...)
+                    fmt.Printf("Подзапрос '%s' → %d результатов\n", subQuery, len(subResults))
+                }
+                
+                if len(allResults) > 0 {
+                    results = retrieve.ReciprocalRankFusion(allResults)
+                    if len(results) > candidateK {
+                        results = results[:candidateK]
+                    }
+                    fmt.Printf("Декомпозиция: объединено %d результатов\n", len(results))
+                } else {
+                    fmt.Printf("Декомпозиция не дала результатов, использую оригинальный запрос\n")
+                }
+            }
+        }
+    }
 
     if cfg.Retrieval.EnableMultiQuery { // Multi-Query
         fmt.Printf("Запускаю Multi-Query поиск...\n")
@@ -491,7 +601,9 @@ rerankStart := time.Now()
 
 			return texts, docs, scores, "LLM не отвечает", pages, chunkIDs, 0, map[string]float64{}
 		}
-		fmt.Printf("LLM ответила, длина: %d символов\n", len(answer))
+		fmt.Printf("[rag.Ask] Ответ от LLM получен\n")      // ← ЭТИ 3 СТРОЧКИ ВСТАВЬ
+    fmt.Printf("Длина ответа: %d символов\n", len(answer))
+    fmt.Printf("Токенов использовано: %d\n", tokensUsed)
 		llmDuration = time.Since(startLLM).Seconds()
 		monitorMetrics.SetLLMDuration(time.Since(startLLM))
 
@@ -598,38 +710,13 @@ rerankStart := time.Now()
 		"search": searchDuration,
 		"llm":    llmDuration,
 	}
-	/*
-	if redisCache != nil && len(texts) > 0 && answer != "" {
-    hasInfo := !strings.Contains(answer, "нет информации") && 
-               !strings.Contains(answer, "не найдено") &&
-               !strings.Contains(answer, "В документации нет информации по этому вопросу.")
-    
-    if hasInfo {
-        cachedAnswer := &cache.CachedAnswer{
-            Answer:    answer,
-            Sources:   docs,
-            Tokens:    tokensUsed,
-            Timestamp: time.Now(),
-        }
-        err := redisCache.SaveAnswer(context.Background(), question, userID, cachedAnswer)
-        if err != nil {
-            fmt.Printf("Ошибка сохранения в Redis: %v\n", err)
-        } else {
-            fmt.Println("Ответ сохранён в Redis кеш")
-        }
-    } else {
-        fmt.Println("Ответ не содержит информации, пропускаем кеширование")
-    }
-}*/
-	/*metrics.RequestDuration.WithLabelValues("ask").Observe(time.Since(startTotal).Seconds())
-metrics.RetrievedChunks.Observe(float64(len(texts)))
-metrics.TokensUsed.Observe(float64(tokensUsed))
 
-if len(texts) > 0 {
-    metrics.RequestsTotal.WithLabelValues("ask", "success").Inc()
-} else {
-    metrics.RequestsTotal.WithLabelValues("ask", "empty").Inc()
-}*/
+    fmt.Println("\n" + strings.Repeat("=", 60))
+    fmt.Println("ОТВЕТ LLM")
+    fmt.Println(strings.Repeat("=", 60))
+    fmt.Printf("%s\n", answer)
+    fmt.Println(strings.Repeat("=", 60))
+    fmt.Println("")
 
 	return texts, docs, scores, answer, pages, chunkIDs, tokensUsed, timings
 }

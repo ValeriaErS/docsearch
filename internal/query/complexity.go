@@ -72,6 +72,7 @@ type RetrievalStrategy struct { //стратегия поиска
     UseRerank      bool
     UseMultiQuery  bool
     UseMMR         bool
+    UseDecomposition bool
     Description    string
 }
 
@@ -82,11 +83,12 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
             CandidateTopK:  20,
             RerankTopK:     5,
             FinalTopK:      3,
-            UseRewriting:   false,
-            UseHybrid:      false,
-            UseRerank:      false,
+            UseRewriting:   true,
+            UseHybrid:      true,
+            UseRerank:      true,
             UseMultiQuery:  false,
             UseMMR:         true,
+            UseDecomposition: false,
             Description:    "простой поиск",
         }
     case ComplexityMedium:
@@ -99,6 +101,7 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
             UseRerank:      true,
             UseMultiQuery:  false,
             UseMMR:         true,
+            UseDecomposition: true,
             Description:    "гибридный поиск с реранкингом",
         }
     case ComplexityComplex:
@@ -111,6 +114,7 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
             UseRerank:      true,
             UseMultiQuery:  true,
             UseMMR:         true,
+            UseDecomposition: true,
             Description:    "полный пайплайн",
         }
     default:
@@ -123,6 +127,7 @@ func GetRetrievalStrategy(complexity Complexity) RetrievalStrategy {
             UseRerank:      true,
             UseMultiQuery:  false,
             UseMMR:         true,
+            UseDecomposition: true,
             Description:    "стандартный поиск",
         }
     }

@@ -9,6 +9,7 @@ import (
 )
 
 func GenerateMultiQueries(ctx context.Context, query string, cfg *config.Config) ([]string, error) {  //  генерирует несколько вариантов одного вопроса
+	fmt.Printf("[MultiQuery] Генерирую варианты запроса: '%s'\n", query)
 	if cfg.LLM.Provider == "mock" {
 		return []string{query}, nil
 	}
@@ -62,7 +63,9 @@ DocSearch монтаж
 	if len(variants) > 5 {  // оставляю не больше 5 вариантов
 		variants = variants[:5]
 	}
-
-	fmt.Printf("Сгенерировано %d вариантов запроса\n", len(variants))
+	fmt.Printf("[MultiQuery] Сгенерировано %d вариантов:\n", len(variants))   
+    for i, v := range variants {
+        fmt.Printf("Вариант %d: '%s'\n", i+1, v)
+    }
 	return variants, nil
 }

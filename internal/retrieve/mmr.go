@@ -1,7 +1,8 @@
 package retrieve
 
 import (
-    "math"
+	"math"
+	"fmt"
 )
 
 // По формуле из статьи DataTalks.ru:
@@ -13,95 +14,99 @@ import (
 //   - topK: сколько документов вернуть
 //   - fetchK: сколько кандидатов брать до MMR
 func MMRSelect(results []map[string]interface{}, lambda float64, topK int, fetchK int) []map[string]interface{} {
-    if len(results) == 0 {
-        return results
-    }
+	fmt.Printf("[MMR] Выбор разнообразных чанков\n")
+	fmt.Printf("Кандидатов: %d, λ=%.2f\n", len(results), lambda)
 
-    if len(results) <= topK {
-        return results
-    }
+	if len(results) == 0 {
+		return results
+	}
 
-    if lambda <= 0 {
-        lambda = 0.5 
-    }
-    if lambda > 1 {
-        lambda = 1.0
-    }
-    if topK <= 0 {
-        topK = 5
-    }
+	if len(results) <= topK {
+		return results
+	}
 
-    if fetchK <= 0 || fetchK > len(results) {
-        fetchK = len(results)
-    }
+	if lambda <= 0 {
+		lambda = 0.5
+	}
+	if lambda > 1 {
+		lambda = 1.0
+	}
+	if topK <= 0 {
+		topK = 5
+	}
 
-    candidates := results[:fetchK]
+	if fetchK <= 0 || fetchK > len(results) {
+		fetchK = len(results)
+	}
 
-    scores := make([]float64, len(candidates))
-    for i, r := range candidates {
-        s, ok := r["score"].(float64)
-        if !ok {
-            s = 0.0
-        }
-        scores[i] = s
-    }
+	candidates := results[:fetchK]
 
-    similarityMatrix := make([][]float64, len(candidates))   // вычисляю попарное сходство между кандидатами
-    for i := 0; i < len(candidates); i++ {
-        similarityMatrix[i] = make([]float64, len(candidates))
-        for j := 0; j < len(candidates); j++ {
-            diff := math.Abs(scores[i] - scores[j])
-            similarityMatrix[i][j] = 1.0 / (1.0 + diff*10) // нормализую в [0,1]
-        }
-    }
+	scores := make([]float64, len(candidates))
+	for i, r := range candidates {
+		s, ok := r["score"].(float64)
+		if !ok {
+			s = 0.0
+		}
+		scores[i] = s
+	}
 
-    selected := []map[string]interface{}{} 
-    selectedIndices := []int{}
+	similarityMatrix := make([][]float64, len(candidates)) // вычисляю попарное сходство между кандидатами
+	for i := 0; i < len(candidates); i++ {
+		similarityMatrix[i] = make([]float64, len(candidates))
+		for j := 0; j < len(candidates); j++ {
+			diff := math.Abs(scores[i] - scores[j])
+			similarityMatrix[i][j] = 1.0 / (1.0 + diff*10) // нормализую в [0,1]
+		}
+	}
 
-    for len(selected) < topK && len(selectedIndices) < len(candidates) {
-        bestIdx := -1
-        bestScore := -math.MaxFloat64
+	selected := []map[string]interface{}{}
+	selectedIndices := []int{}
 
-        for i := 0; i < len(candidates); i++ {
-            alreadySelected := false
-            for _, idx := range selectedIndices {
-                if idx == i {
-                    alreadySelected = true
-                    break
-                }
-            }
-            if alreadySelected {
-                continue
-            }
+	for len(selected) < topK && len(selectedIndices) < len(candidates) {
+		bestIdx := -1
+		bestScore := -math.MaxFloat64
 
-            relevance := lambda * scores[i]   // релевантность
+		for i := 0; i < len(candidates); i++ {
+			alreadySelected := false
+			for _, idx := range selectedIndices {
+				if idx == i {
+					alreadySelected = true
+					break
+				}
+			}
+			if alreadySelected {
+				continue
+			}
 
-            diversity := 0.0    // разнообразие
-            if len(selectedIndices) > 0 {
-                maxSim := -math.MaxFloat64
-                for _, idx := range selectedIndices {
-                    if similarityMatrix[i][idx] > maxSim {
-                        maxSim = similarityMatrix[i][idx]
-                    }
-                }
-                diversity = (1 - lambda) * maxSim
-            }
+			relevance := lambda * scores[i] // релевантность
 
-            mmrScore := relevance - diversity
+			diversity := 0.0 // разнообразие
+			if len(selectedIndices) > 0 {
+				maxSim := -math.MaxFloat64
+				for _, idx := range selectedIndices {
+					if similarityMatrix[i][idx] > maxSim {
+						maxSim = similarityMatrix[i][idx]
+					}
+				}
+				diversity = (1 - lambda) * maxSim
+			}
 
-            if mmrScore > bestScore {
-                bestScore = mmrScore
-                bestIdx = i
-            }
-        }
+			mmrScore := relevance - diversity
 
-        if bestIdx == -1 {
-            break
-        }
+			if mmrScore > bestScore {
+				bestScore = mmrScore
+				bestIdx = i
+			}
+		}
 
-        selected = append(selected, candidates[bestIdx])
-        selectedIndices = append(selectedIndices, bestIdx)
-    }
+		if bestIdx == -1 {
+			break
+		}
 
-    return selected
+		selected = append(selected, candidates[bestIdx])
+		selectedIndices = append(selectedIndices, bestIdx)
+	}
+
+	fmt.Printf("[MMR] Оставлено: %d чанков\n", len(selected))
+	return selected
 }
