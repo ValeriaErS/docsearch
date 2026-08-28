@@ -427,55 +427,55 @@
     });
 
     function exportChat() {
-    const messages = chat.querySelectorAll('.msg');
-    
-    if (messages.length === 0) {
-        alert('Нет сообщений для экспорта');
-        return;
-    }
-    
-    let text = 'DOCSEARCH — ИСТОРИЯ ЧАТА\n\n';
-    text += `Дата экспорта: ${new Date().toLocaleString()}\n`;
-    text += `Пользователь: ${USER}\n`;
-    text += `Всего сообщений: ${messages.length}\n\n`;
-    
-    let msgNumber = 0;
-    
-    messages.forEach(msg => {
-        const isUser = msg.classList.contains('user');
-        const textDiv = msg.querySelector('div:first-child');
-        let textContent = textDiv ? textDiv.textContent.trim() : '';
+        const messages = chat.querySelectorAll('.msg');
         
-        if (textContent.includes('Добро пожаловать') && messages.length === 1) {
+        if (messages.length === 0) {
+            alert('Нет сообщений для экспорта');
             return;
         }
         
-        msgNumber++;
-        const role = isUser ? 'Вы' : 'DocSearch';
-        const time = new Date().toLocaleTimeString();
+        let text = 'DOCSEARCH — ИСТОРИЯ ЧАТА\n\n';
+        text += `Дата экспорта: ${new Date().toLocaleString()}\n`;
+        text += `Пользователь: ${USER}\n`;
+        text += `Всего сообщений: ${messages.length}\n\n`;
         
-        text += `[${msgNumber}] ${role} (${time})\n`;
-        text += textContent + '\n';
+        let msgNumber = 0;
         
-        const sourcesEl = msg.querySelector('.sources');
-        if (sourcesEl) {
-            text += `Источники: ${sourcesEl.textContent.replace('Источники: ', '')}\n`;
-        }
+        messages.forEach(msg => {
+            const isUser = msg.classList.contains('user');
+            const textDiv = msg.querySelector('div:first-child');
+            let textContent = textDiv ? textDiv.textContent.trim() : '';
+            
+            if (textContent.includes('Добро пожаловать') && messages.length === 1) {
+                return;
+            }
+            
+            msgNumber++;
+            const role = isUser ? 'Вы' : 'DocSearch';
+            const time = new Date().toLocaleTimeString();
+            
+            text += `[${msgNumber}] ${role} (${time})\n`;
+            text += textContent + '\n';
+            
+            const sourcesEl = msg.querySelector('.sources');
+            if (sourcesEl) {
+                text += `Источники: ${sourcesEl.textContent.replace('Источники: ', '')}\n`;
+            }
+            
+            text += '\n';
+        });
         
-        text += '\n';
-    });
-    
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `chat_${USER}_${new Date().toISOString().slice(0,10)}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chat_${USER}_${new Date().toISOString().slice(0,10)}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
 
     function addMessage(text, isUser, sources, timings) {
         const msg = document.createElement('div');
@@ -648,38 +648,38 @@
     }
 
     function stopSearch() {
-    if (abortController) {
-        abortController.abort();
-        abortController = null;
-    }
-    isProcessing = false;
-    
-    const stopBtn = document.getElementById('stopBtn');
-    if (stopBtn) stopBtn.remove();
-
-    btn.style.display = 'inline-block';
-    btn.disabled = false;
-    btn.textContent = 'Отправить';
-    input.disabled = false;
-    input.placeholder = 'Напиши свой вопрос...';
-    input.focus();
-
-    const waits = chat.querySelectorAll('.msg.bot');
-    for (const w of waits) {
-        if (w.textContent.includes('Ищу...') || w.textContent.includes('Ищу ответ')) {
-            w.remove();
+        if (abortController) {
+            abortController.abort();
+            abortController = null;
         }
+        isProcessing = false;
+        
+        const stopBtn = document.getElementById('stopBtn');
+        if (stopBtn) stopBtn.remove();
+
+        btn.style.display = 'inline-block';
+        btn.disabled = false;
+        btn.textContent = 'Отправить';
+        input.disabled = false;
+        input.placeholder = 'Напиши свой вопрос...';
+        input.focus();
+
+        const waits = chat.querySelectorAll('.msg.bot');
+        for (const w of waits) {
+            if (w.textContent.includes('Ищу...') || w.textContent.includes('Ищу ответ')) {
+                w.remove();
+            }
+        }
+
+        const msg = document.createElement('div');
+        msg.className = 'msg bot';
+        msg.textContent = 'Поиск прерван. Можете задать новый вопрос.';
+        msg.style.opacity = '0.7';
+        chat.appendChild(msg);
+        chat.scrollTop = chat.scrollHeight;
+
+        console.log("Поиск остановлен");
     }
-
-    const msg = document.createElement('div');
-    msg.className = 'msg bot';
-    msg.textContent = 'Поиск прерван. Можете задать новый вопрос.';
-    msg.style.opacity = '0.7';
-    chat.appendChild(msg);
-    chat.scrollTop = chat.scrollHeight;
-
-    console.log("Поиск остановлен");
-}
 
     function sendQuestion() {
         if (isProcessing) {
@@ -726,6 +726,22 @@
             return;
         }
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+            wait.remove();
+            addMessage('Поиск занимает слишком много времени. Попробуйте упростить вопрос.', false);
+            isProcessing = false;
+            btn.style.display = 'inline-block';
+            btn.disabled = false;
+            btn.textContent = 'Отправить';
+            input.disabled = false;
+            input.placeholder = 'Напиши свой вопрос...';
+            input.focus();
+            const stopBtnEl = document.getElementById('stopBtn');
+            if (stopBtnEl) stopBtnEl.remove();
+        }, 300000);
+
         fetch('/ask', {
             method: 'POST',
             headers: {
@@ -733,9 +749,10 @@
                 'Authorization': 'Bearer ' + token
             },
             body: JSON.stringify({ query: q }),
-            signal: abortController.signal
+            signal: controller.signal
         })
         .then(res => {
+            clearTimeout(timeoutId);
             if (!res.ok) {
                 throw new Error('Ошибка сервера: ' + res.status);
             }
@@ -752,31 +769,30 @@
             }
         })
         .catch(e => {
+            clearTimeout(timeoutId);
             if (e.name !== 'AbortError') {
                 wait.remove();
-                addMessage('Ошибка соединения с сервером. Проверь, что сервер запущен.', false);
+                addMessage('Ошибка соединения с сервером.', false);
                 console.error("Ошибка:", e);
             }
         })
         .finally(() => {
-            if (abortController !== null) {
-                const stopBtn = document.getElementById('stopBtn');
-                if (stopBtn) stopBtn.remove();
+            clearTimeout(timeoutId);
+            const stopBtnEl = document.getElementById('stopBtn');
+            if (stopBtnEl) stopBtnEl.remove();
 
-                btn.style.display = 'inline-block';
-                btn.disabled = false;
-                btn.textContent = 'Отправить';
-                input.disabled = false;
-                input.placeholder = 'Напиши свой вопрос...';
-                input.focus();
+            btn.style.display = 'inline-block';
+            btn.disabled = false;
+            btn.textContent = 'Отправить';
+            input.disabled = false;
+            input.placeholder = 'Напиши свой вопрос...';
+            input.focus();
 
-                isProcessing = false;
-                abortController = null;
-            }
+            isProcessing = false;
         });
     }
 
-     btn.addEventListener('click', function(e) {
+    btn.addEventListener('click', function(e) {
         e.preventDefault();
         sendQuestion();
     });
@@ -787,6 +803,6 @@
             sendQuestion();
         }
     });
-</script>
+    </script>
 </body>
 </html>
