@@ -340,8 +340,11 @@ func handleRegister(w http.ResponseWriter, r *http.Request) { // обработ�
 // @Security BearerAuth
 // @Router /ask [post]
 func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик вопрос
+	fmt.Println("[handleAsk] Начало обработки запроса")
+
 	authHeader := r.Header.Get("Authorization") // проверяю токен
 	if authHeader == "" {
+		fmt.Println("[handleAsk] Нет токена")
 		http.Error(w, "Нет токена", http.StatusUnauthorized)
 		return
 	}
@@ -349,6 +352,7 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	username, err := auth.CheckToken(tokenString)
 	if err != nil {
+		 fmt.Println("[handleAsk] Неверный токен:", err)
 		http.Error(w, "Неверный токен", http.StatusUnauthorized)
 		return
 	}
@@ -365,7 +369,6 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -404,6 +407,10 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 	chatMutex.RUnlock()
 
 	texts, docs, scores, answer, pages, chunkIDs, _, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history, vectorClientGlobal)
+	
+	fmt.Println("[handleAsk] Отправляю ответ")
+	fmt.Printf("Длина ответа: %d символов\n", len(answer))
+	
 	sources := []map[string]interface{}{}
 	for i := 0; i < len(texts); i++ {
    
@@ -431,6 +438,7 @@ func handleAsk(w http.ResponseWriter, r *http.Request) { //обработчик 
 		"sources": sources,
 		"timings": timings,
 	})
+	fmt.Println("[handleAsk] Ответ отправлен успешно")
 }
 // @Summary Задать вопрос агенту
 // @Description Отправляет вопрос AI-агенту, который использует RAG
@@ -494,34 +502,108 @@ func handleAgentAsk(w http.ResponseWriter, r *http.Request) {
 // @Failure 503 {object} map[string]string "Service Unavailable"
 // @Router /health [get]
 func handleHealth(w http.ResponseWriter, r *http.Request) {
-	authHeader := r.Header.Get("Authorization") //проверка токена
+	fmt.Println("[handleAsk] Начало обработки запроса")
+	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		http.Error(w, "Требуется авторизация", http.StatusUnauthorized)
+		fmt.Println("[handleAsk] Нет токена")
+		http.Error(w, "Нет токена", http.StatusUnauthorized)
 		return
 	}
 
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	_, err := auth.CheckToken(tokenString)
+	username, err := auth.CheckToken(tokenString)
 	if err != nil {
+		fmt.Println("[handleAsk] Неверный токен:", err)
 		http.Error(w, "Неверный токен", http.StatusUnauthorized)
 		return
 	}
+	fmt.Println("[handleAsk] Пользователь:", username)
 
-	client, err := vector.NewQdrantClient() //проверка бд
+	if r.Method != "POST" {
+		http.Error(w, "Нужен POST", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Query string `json:"query"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
+	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, "Qdrant недоступен", http.StatusServiceUnavailable)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Ошибка чтения запроса",
+		})
 		return
 	}
-	if err := client.Ping(context.Background()); err != nil {
-		http.Error(w, "Qdrant не отвечает", http.StatusServiceUnavailable)
+
+	if req.Query == "" {
+		http.Error(w, "Пустой вопрос", http.StatusBadRequest)
 		return
 	}
+
+	userID := username
+
+	chatMutex.Lock()
+	if chatHistory[userID] == nil {
+		chatHistory[userID] = []map[string]string{}
+	}
+	chatHistory[userID] = append(chatHistory[userID], map[string]string{
+		"role":    "user",
+		"content": req.Query,
+	})
+	chatMutex.Unlock()
+
+	chatMutex.Lock()
+	if len(chatHistory[userID]) > maxHistorySize {
+		chatHistory[userID] = chatHistory[userID][len(chatHistory[userID])-maxHistorySize:]
+	}
+	chatMutex.Unlock()
+
+	chatMutex.RLock()
+	history := chatHistory[userID]
+	chatMutex.RUnlock()
+
+	texts, docs, scores, answer, pages, chunkIDs, _, timings := rag.Ask(r.Context(), *globalCfg, req.Query, userID, history, vectorClientGlobal)
+	sources := []map[string]interface{}{}
+	for i := 0; i < len(texts); i++ {
+		if i >= len(docs) || i >= len(scores) || i >= len(pages) || i >= len(chunkIDs) {
+			break
+		}
+		sources = append(sources, map[string]interface{}{
+			"doc_id":   docs[i],
+			"score":    scores[i],
+			"page":     pages[i],
+			"chunk_id": chunkIDs[i],
+		})
+	}
+
+	chatMutex.Lock()
+	chatHistory[userID] = append(chatHistory[userID], map[string]string{
+		"role":    "assistant",
+		"content": answer,
+	})
+	chatMutex.Unlock()
+
+	fmt.Println("[handleAsk] Отправляю ответ")
+	fmt.Printf("Длина ответа: %d символов\n", len(answer))
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "ok",
-		"qdrant": "connected",
-	})
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"answer":  answer,
+		"sources": sources,
+		"timings": timings,
+	}); err != nil {
+		fmt.Printf("Ошибка отправки ответа: %v\n", err)
+	}
+
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	fmt.Println("[handleAsk] Ответ отправлен успешно")
 }
 // handleLiveness — проверка жизни процесса
 // @Summary Liveness probe
