@@ -178,6 +178,8 @@ func main() {
         benchmarkCmd() 
 	case "--version", "-v":
 		fmt.Println("DocSearch version 1.0.0")
+	case "golden":
+         goldenCmd()
 	default:
 		fmt.Printf("Неизвестная команда: %s\n\n", command)
 		printHelp()
@@ -530,4 +532,64 @@ func benchmarkCmd() {
     }
 
     fmt.Println("Бенчмарк завершен")
+}
+func goldenCmd() {
+    goldenFlag := flag.NewFlagSet("golden", flag.ExitOnError)
+    userID := goldenFlag.String("user", "", "Имя пользователя")
+    configFile := goldenFlag.String("config", "configs/config.yml", "Путь к конфигу")
+    goldenPath := goldenFlag.String("path", "testdata/golden.jsonl", "Путь к golden.jsonl")
+
+    goldenFlag.Parse(os.Args[2:])
+
+    if *userID == "" {
+        fmt.Println("Ошибка: требуется --user")
+        goldenFlag.Usage()
+        os.Exit(2)
+    }
+
+    cfg, err := config.LoadConfig(*configFile)
+    if err != nil {
+        fmt.Println("Ошибка загрузки конфига:", err)
+        return
+    }
+
+    safeUser, err := safety.SanitizeAndValidateUser(*userID)
+    if err != nil {
+        fmt.Println("Ошибка: неверное имя пользователя:", err)
+        return
+    }
+
+    questions, err := eval.LoadGoldenQuestions(*goldenPath)
+    if err != nil {
+        fmt.Printf("Ошибка загрузки golden.jsonl: %v\n", err)
+        return
+    }
+
+    if len(questions) == 0 {
+        fmt.Println("Нет вопросов в golden.jsonl")
+        return
+    }
+
+    vectorClient, err := createVectorClient(cfg)
+    if err != nil {
+        fmt.Println("Ошибка подключения к векторной БД:", err)
+        return
+    }
+
+    fmt.Printf("Запуск оценки на золотом наборе (%d вопросов)...\n", len(questions))
+
+    searchFunc := func(query string) []string {
+        _, docs, _, _, _, _, _, _ := rag.Ask(
+            context.Background(),
+            *cfg,
+            query,
+            safeUser,
+            []map[string]string{},
+            vectorClient,
+        )
+        return docs
+    }
+
+    summary := eval.EvaluateGolden(questions, searchFunc)
+    eval.PrintGoldenSummary(summary)
 }
