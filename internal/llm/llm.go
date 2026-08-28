@@ -25,6 +25,11 @@ func init() {
 }
 
 func GetAnswerWithHistory(ctx context.Context, question string, chunks []string, docNames []string, pages []int, history []map[string]string, cfg *config.Config) (string, int, error) {
+	fmt.Println("[LLM] Начало генерации")
+    fmt.Printf("Вопрос: %s\n", question)
+    fmt.Printf("Чанков в контексте: %d\n", len(chunks))
+    fmt.Printf("Страницы: %v\n", pages)
+
 	apiKey := os.Getenv("LLM_API_KEY")
 	if apiKey == "" {
 		return "", 0, fmt.Errorf("нет ключа")
@@ -57,7 +62,7 @@ func GetAnswerWithHistory(ctx context.Context, question string, chunks []string,
 
 Инструкция:
 1. Прочитай контекст и найди ответ на вопрос.
-2. Если ответ есть — напиши его ПОДРОБНО, используя ВСЮ информацию из контекста.
+2. Если ответ есть — напиши его КРАТКО (3-5 предложений).
 3. Если ответа нет — напиши: "В документации нет информации по этому вопросу."
 4. В конце каждого абзаца укажи источник: [источник: имя_файла, страница N]
 
@@ -113,6 +118,10 @@ func GetAnswerWithHistory(ctx context.Context, question string, chunks []string,
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
+		fmt.Printf("[LLM] Отправляю запрос к модели: %s\n", cfg.LLM.Model)   
+    fmt.Printf("Температура: %.1f\n", cfg.LLM.Temperature)
+    fmt.Printf("Макс. токенов: %d\n", cfg.LLM.MaxTokens)
+
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		req.Header.Set("HTTP-Referer", "http://localhost")
 		req.Header.Set("X-Title", "docsearch")
@@ -176,6 +185,11 @@ func GetAnswerWithHistory(ctx context.Context, question string, chunks []string,
 		answer = strings.TrimSpace(answer)
 
 		tokensUsed := result.Usage.TotalTokens
+
+		fmt.Printf("[LLM] Ответ получен\n")    
+    fmt.Printf("Длина: %d символов\n", len(answer))
+    fmt.Printf("Токенов использовано: %d\n", tokensUsed)
+
 		return answer, tokensUsed, nil
 	}
 

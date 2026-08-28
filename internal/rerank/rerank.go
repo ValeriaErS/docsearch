@@ -19,6 +19,7 @@ func NewReranker(cfg*config.Config) *Reranker {  // создает новый р
 	}
 
 func (r *Reranker) Rerank(ctx context.Context, query string, chunks []string, topK int) ([]int, []float64, error) {  //  переранжирует чанки с помощью маленькой ллм
+    fmt.Printf("[Rerank] Пересортировка %d чанков → топ-%d\n", len(chunks), topK)
 	n := len(chunks)
     if n == 0 {
         return nil, nil, nil
@@ -44,6 +45,7 @@ func (r *Reranker) Rerank(ctx context.Context, query string, chunks []string, to
             indices[i] = arr[i].idx
             scores[i] = arr[i].score
         }
+        fmt.Printf("[Rerank] Оставлено %d чанков\n", len(indices)) 
         return indices, scores, nil
     }
 	
@@ -115,6 +117,7 @@ if len(indices)==0{
 		indices[i]=i
 	}
 }
+fmt.Printf("[Rerank] Оставлено %d чанков\n", len(indices))
 return indices,nil,nil
 }
 func min(a,b int) int{

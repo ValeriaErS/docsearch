@@ -156,6 +156,7 @@ func (q *QdrantClient) Save(ctx context.Context, name string, id string, vec []f
 }
 
 func (q *QdrantClient) Search(ctx context.Context, name string, vec []float32, limit int, userID string) ([]map[string]interface{}, error) { // ищу похожие чанки
+	fmt.Printf("[Odrand] Поиск %d кандидатов для user=%s\n", limit, userID)
 	d := map[string]interface{}{
 		"vector":       vec,
 		"limit":        limit,
@@ -373,6 +374,8 @@ func (q *QdrantClient) GetAllVectors(ctx context.Context, name string, userID st
 }
 
 func (q *QdrantClient) SearchText(ctx context.Context, name string, query string, limit int, userID string) ([]map[string]interface{}, error) {
+	fmt.Printf("[Qdrant] Текстовый поиск: '%s'\n", query)
+	fmt.Printf("[Qdrant] Поиск %d кандидатов для user=%s\n", limit, userID)
 	if limit <= 0 {
 		limit = 10
 	}
@@ -442,6 +445,7 @@ func (q *QdrantClient) SearchText(ctx context.Context, name string, query string
 			"payload": p.Payload,
 		})
 	}
+	fmt.Printf("[Qdrant] Найдено %d текстовых результатов\n", len(out)) 
 	return out, nil
 }
 

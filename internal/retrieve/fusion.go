@@ -2,6 +2,7 @@ package retrieve
 
 import (
 	"sort"
+	"fmt"
 )
 type FusionResult struct {  // результат объединения
 	ID      string
@@ -34,6 +35,13 @@ func ReciprocalRankFusion(resultsLists ...[]map[string]interface{}) []map[string
 	return convertToResults(fusionMap)
 }
 func WeightedReciprocalRankFusion(weights []float64, resultsLists ...[]map[string]interface{}) []map[string]interface{} {
+	fmt.Printf("[RRF] Объединение результатов\n")
+	fmt.Printf("Векторных: %d\n", len(resultsLists[0]))
+	if len(resultsLists) > 1 {
+		fmt.Printf("Текстовых: %d\n", len(resultsLists[1]))
+	}
+	fmt.Printf("Веса: Vector=%.1f, Text=%.1f\n", weights[0], weights[1])
+	
 	const k = 60
 
 	if len(weights) != len(resultsLists) {
@@ -77,6 +85,7 @@ func convertToResults(fusionMap map[string]*FusionResult) []map[string]interface
 	sort.Slice(results, func(i, j int) bool {
 		return results[i]["score"].(float64) > results[j]["score"].(float64)
 	})
+	fmt.Printf("[RRF] После объединения: %d результатов\n", len(results))
 
 	return results
 }
