@@ -45,6 +45,7 @@ type Config struct {
 		EnableMMR        bool    `yaml:"enable_mmr"`
 		MMRLambda        float64 `yaml:"mmr_lambda"`
 		MMRFetchK        int     `yaml:"mmr_fetch_k"`
+		EnableDecomposition bool `yaml:"enable_decomposition"`
 
 		HybridWeights struct {
             Vector float64 `yaml:"vector"`

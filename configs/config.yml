@@ -17,16 +17,17 @@ retrieval:
     rerank_top_k: 10
     final_top_k: 5
     min_score: 0.0
-    enable_rewriting: false
-    enable_hyde: false
+    enable_rewriting: true
+    enable_hyde: true
     hybrid_search: true 
     enable_rerank: true
-    enable_multi_query: false
-    enable_compression: false
-    enable_relevance_check: false
+    enable_multi_query: true
+    enable_compression: true
+    enable_relevance_check: true
     enable_mmr: true
     mmr_lambda: 0.5
     mmr_fetch_k: 25
+    enable_decomposition: true
 
 hybrid_weights:
     vector: 1.0
@@ -37,7 +38,7 @@ llm:
     model: "openrouter/free"
     base_url: "https://openrouter.ai/api/v1"
     temperature: 0.1
-    max_tokens: 2048
+    max_tokens: 1024
 
 cache:
     enable_embedding_cache: false
@@ -47,11 +48,11 @@ cache:
 validation:
     enable_citation_validator: true   
     remove_invalid_citations: true
-    enable_hallucination_detection: false  
-    warn_on_hallucination: false 
+    enable_hallucination_detection: true  
+    warn_on_hallucination: true 
 
 verification:
-    enable_answer_verification: false
+    enable_answer_verification: true
 
 rate_limit:
     enabled: true
