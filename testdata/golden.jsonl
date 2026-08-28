@@ -1,0 +1,5 @@
+{"query":"Что такое RAG?","relevant_docs":["doc1.md"],"relevant_chunks":[]}
+{"query":"Что такое эмбеддинги?","relevant_docs":["doc2.md"],"relevant_chunks":[]}
+{"query":"Что такое FileAuditor?","relevant_docs":["doc4.md"],"relevant_chunks":[]}
+{"query":"Как работает Qdrant?","relevant_docs":["doc3.md"],"relevant_chunks":[]}
+{"query":"Сравни RAG и FileAuditor","relevant_docs":["doc1.md","doc4.md"],"relevant_chunks":[]}
